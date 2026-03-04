@@ -31,7 +31,7 @@ const FORM_TEACHERS = {
   "js2teacher@brightschool.com": "JS 2",
   "js3teacher@brightschool.com": "JS 3",
   "brightstephen04@gmail.com": "SS 1",
-  "brightstephen02@gmail.com": "SS 2",
+  "apostlesundaybaridole1986@gmail.com": "SS 2",
   "ss3teacher@brightschool.com": "SS 3",
 };
 
@@ -47,6 +47,10 @@ const SUBJECT_TEACHERS = {
     subjects:  ["Chemistry", "Computer Science", "Data Processing"],
     classArms: ["SS 1A","SS 1B","SS 2A","SS 2B","SS 3A","SS 3B"]
   },
+  "apostlesundaybaridole1986@gmail.com": {
+  subjects: ["Biology", "Civic Education", "Government"],
+  classArms: ["SS 1A", "SS 1B", "SS 2A", "SS 2B", "SS 3A", "SS 3B"]
+},
   // DUAL-ROLE EXAMPLE — form teacher who also teaches a subject:
   // "js1teacher@brightschool.com": {
   //   subjects:  ["Basic Science"],
