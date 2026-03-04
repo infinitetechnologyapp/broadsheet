@@ -55,6 +55,10 @@ const SUBJECT_TEACHERS = {
   subjects: ["Social Studies", "Computer Studies"],
   classArms: ["JS 1A", "JS 1B", "JS 2A", "JS 2B", "JS 3A", "JS 3B"]
 },
+"chinonsohappiness2023@gmail.com": {
+subjects: ["Marketing", "Commerce", "CRS", "Financial Accounting", "Economics"],
+  classArms: ["SS 1A", "SS 1B", "SS 2A", "SS 2B", "SS 3A", "SS 3B"]
+},
   // DUAL-ROLE EXAMPLE — form teacher who also teaches a subject:
   // "js1teacher@brightschool.com": {
   //   subjects:  ["Basic Science"],
