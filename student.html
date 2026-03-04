@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Results</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+<div style="max-width:900px;margin:0 auto;padding:24px" id="app">
+
+  <!-- Loading -->
+  <div id="loadingState" style="text-align:center;padding:80px 20px">
+    <div class="spinner" style="width:48px;height:48px;margin:0 auto 16px"></div>
+    <p style="color:var(--text-muted);font-weight:600">Loading your result…</p>
+  </div>
+
+  <!-- Not Approved -->
+  <div id="notApprovedState" class="hidden" style="text-align:center;padding:60px 20px">
+    <div style="width:80px;height:80px;border-radius:50%;background:var(--warning-light);display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+      <i class="bi bi-hourglass-split" style="font-size:2.2rem;color:var(--warning)"></i>
+    </div>
+    <h3 style="margin-bottom:8px">Results Not Yet Available</h3>
+    <p style="color:var(--text-muted);max-width:400px;margin:0 auto 8px;font-size:.9rem">
+      Your results for <strong id="notApprovedClass">this class and term</strong> have not been released yet by the school administration.
+    </p>
+    <p style="color:var(--text-muted);font-size:.82rem;margin-bottom:24px">
+      Please check back later or contact your form teacher.
+    </p>
+    <a href="index.html" class="btn btn-outline"><i class="bi bi-arrow-left"></i> Back to Home</a>
+  </div>
+
+  <!-- Error -->
+  <div id="errorState" class="hidden" style="text-align:center;padding:80px 20px">
+    <i class="bi bi-exclamation-triangle-fill" style="font-size:3rem;color:var(--danger);display:block;margin-bottom:12px"></i>
+    <h4 id="errorMsg" style="margin-bottom:16px">Something went wrong.</h4>
+    <a href="index.html" class="btn btn-outline"><i class="bi bi-arrow-left"></i> Go Back</a>
+  </div>
+
+  <!-- Result Content -->
+  <div id="resultContent" class="hidden">
+
+    <!-- Actions bar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <a href="index.html" class="btn btn-outline btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
+      <button class="btn btn-primary btn-sm" id="downloadPdfBtn">
+        <i class="bi bi-download"></i> Download Report Card
+      </button>
+    </div>
+
+    <!-- Report Card -->
+    <div id="reportCard" class="card">
+
+      <!-- Report Header -->
+      <div style="background:linear-gradient(135deg,var(--primary),#7c3aed);padding:28px 24px;color:#fff;text-align:center">
+        <div style="width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:900;margin:0 auto 10px">B</div>
+        <h2 style="font-size:1.4rem;font-weight:900;margin-bottom:2px">BrightSchool</h2>
+        <p style="font-size:.82rem;opacity:.85">Student Report Card</p>
+        <div id="sessionBadge" style="display:inline-block;background:rgba(255,255,255,.15);border-radius:99px;padding:4px 14px;font-size:.78rem;font-weight:700;margin-top:8px">Session — Term</div>
+      </div>
+
+      <!-- Student Info -->
+      <div style="padding:20px 24px;border-bottom:1.5px solid var(--border)">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px">
+          <div>
+            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:800">Full Name</div>
+            <div style="font-weight:800;font-size:1rem;margin-top:3px" id="rcName">—</div>
+          </div>
+          <div>
+            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:800">Reg Number</div>
+            <div style="font-weight:700;margin-top:3px" id="rcReg">—</div>
+          </div>
+          <div>
+            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:800">Class</div>
+            <div style="font-weight:700;margin-top:3px" id="rcClass">—</div>
+          </div>
+          <div>
+            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:800">Gender</div>
+            <div style="font-weight:700;margin-top:3px" id="rcGender">—</div>
+          </div>
+          <div>
+            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:800">Term</div>
+            <div style="font-weight:700;margin-top:3px" id="rcTerm">—</div>
+          </div>
+          <div>
+            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:800">Position in Arm</div>
+            <div style="font-weight:900;color:var(--primary);font-size:1.1rem;margin-top:3px" id="rcPosition">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scores Table -->
+      <div style="padding:20px 24px;border-bottom:1.5px solid var(--border)">
+        <h6 style="font-weight:800;margin-bottom:12px;font-size:.82rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">
+          <i class="bi bi-table me-1"></i> Academic Scores
+        </h6>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Subject</th>
+                <th style="text-align:center">1st Test<br><small style="opacity:.7">/20</small></th>
+                <th style="text-align:center">2nd Test<br><small style="opacity:.7">/20</small></th>
+                <th style="text-align:center">Exam<br><small style="opacity:.7">/60</small></th>
+                <th style="text-align:center">Total<br><small style="opacity:.7">/100</small></th>
+                <th style="text-align:center">Grade</th>
+                <th style="text-align:center">Position</th>
+              </tr>
+            </thead>
+            <tbody id="resultTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Summary Cards -->
+      <div style="padding:16px 24px;border-bottom:1.5px solid var(--border);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px">
+        <div style="text-align:center;padding:12px;background:var(--primary-light);border-radius:10px">
+          <div style="font-size:.65rem;text-transform:uppercase;font-weight:800;color:var(--text-muted)">Grand Total</div>
+          <div style="font-size:1.4rem;font-weight:900;color:var(--primary);margin-top:4px" id="rcTotal">—</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--success-light);border-radius:10px">
+          <div style="font-size:.65rem;text-transform:uppercase;font-weight:800;color:var(--text-muted)">Average</div>
+          <div style="font-size:1.4rem;font-weight:900;color:#16a34a;margin-top:4px" id="rcAverage">—</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--info-light);border-radius:10px">
+          <div style="font-size:.65rem;text-transform:uppercase;font-weight:800;color:var(--text-muted)">Subjects</div>
+          <div style="font-size:1.4rem;font-weight:900;color:var(--info);margin-top:4px" id="rcSubjectCount">—</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--warning-light);border-radius:10px">
+          <div style="font-size:.65rem;text-transform:uppercase;font-weight:800;color:var(--text-muted)">Position in Arm</div>
+          <div style="font-size:1.4rem;font-weight:900;color:#b45309;margin-top:4px" id="rcPositionSummary">—</div>
+        </div>
+      </div>
+
+      <!-- Remark -->
+      <div style="padding:20px 24px;border-bottom:1.5px solid var(--border)">
+        <h6 style="font-weight:800;margin-bottom:8px;font-size:.82rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">
+          <i class="bi bi-chat-quote me-1"></i> Form Teacher's Remark
+        </h6>
+        <div id="rcRemark" style="font-style:italic;color:var(--text-muted);font-size:.9rem;padding:12px 14px;background:#f8fafc;border-radius:8px;border-left:3px solid var(--primary)">
+          No remark entered yet.
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="padding:14px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;background:#f8fafc">
+        <div style="font-size:.72rem;color:var(--text-muted)">Generated by BrightSchool Result System</div>
+        <div style="font-size:.72rem;color:var(--text-muted)" id="rcDate">—</div>
+      </div>
+
+    </div><!-- /report card -->
+  </div><!-- /result content -->
+</div>
+
+<script type="module" src="student.js"></script>
+</body>
+</html>

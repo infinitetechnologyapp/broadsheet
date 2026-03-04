@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard — Recomella Academy</title>
+  <link rel="stylesheet" href="./style.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+<!-- Auth loading overlay — hidden once Firebase confirms session -->
+<div id="authLoadingOverlay" style="position:fixed;inset:0;background:#f1f5f9;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px">
+  <div style="width:52px;height:52px;border-radius:14px;background:#4f46e5;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;color:#fff">RA</div>
+  <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;color:#1e293b">Recomella Academy</div>
+  <div style="width:36px;height:36px;border:4px solid #e0e7ff;border-top-color:#4f46e5;border-radius:50%;animation:spin .8s linear infinite"></div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+</div>
+
+<div id="toastContainer"></div>
+
+<div class="app-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">RA</div>
+      <div class="brand-text">
+        <div>Recomella Academy</div>
+        <div class="brand-sub">Result Broadsheet</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav">
+      <div class="nav-item active" data-section="section-dashboard"><i class="bi bi-grid-fill"></i><span>Dashboard</span></div>
+      <div class="nav-item" data-section="section-students"   id="nav-students"><i class="bi bi-people-fill"></i><span>Students</span></div>
+      <div class="nav-item" data-section="section-subjects"   id="nav-subjects"><i class="bi bi-book-fill"></i><span>Subjects</span></div>
+      <div class="nav-item" data-section="section-scores"     id="nav-scores"><i class="bi bi-pencil-square"></i><span>Enter Scores</span></div>
+      <div class="nav-item" data-section="section-broadsheet" id="nav-broadsheet"><i class="bi bi-table"></i><span>Broadsheet</span></div>
+      <div class="nav-item" data-section="section-remarks"    id="nav-remarks"><i class="bi bi-chat-left-quote-fill"></i><span>Remarks</span></div>
+      <div class="nav-item" data-section="section-approval"   id="nav-approval"><i class="bi bi-patch-check-fill"></i><span>Approvals</span></div>
+      <div class="nav-item" data-section="section-settings"   id="nav-settings"><i class="bi bi-gear-fill"></i><span>Settings</span></div>
+    </nav>
+    <div class="sidebar-footer">
+      <button id="openResetBtn" style="display:none;align-items:center;gap:8px;background:rgba(245,158,11,.1);color:#f59e0b;border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:9px 12px;font-family:'Nunito',sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;width:100%;margin-bottom:8px;transition:all .25s">
+        <i class="bi bi-arrow-counterclockwise"></i> Term Reset
+      </button>
+      <button class="btn-logout" id="logoutBtn"><i class="bi bi-box-arrow-left"></i> Logout</button>
+    </div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- MAIN -->
+  <div class="main-wrapper" id="mainWrapper">
+    <div class="topbar">
+      <button class="toggle-btn" id="toggleBtn"><i class="bi bi-list"></i></button>
+      <div style="font-weight:800;font-size:.95rem">Result Broadsheet</div>
+      <div class="topbar-right">
+        <div class="admin-info">
+          <i class="bi bi-person-circle" style="font-size:1.2rem"></i>
+          <span id="adminEmailDisplay">—</span>
+          <div class="admin-dot"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="main-content">
+
+      <!-- DASHBOARD -->
+      <section class="section active" id="section-dashboard">
+        <div class="page-title"><i class="bi bi-grid-fill" style="color:var(--primary)"></i> Dashboard</div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--primary-light)"><i class="bi bi-people-fill" style="color:var(--primary)"></i></div>
+            <div><div class="stat-val" id="statStudents">0</div><div class="stat-lbl">Total Students</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--success-light)"><i class="bi bi-journal-bookmark-fill" style="color:var(--success)"></i></div>
+            <div><div class="stat-val" id="statClasses">12</div><div class="stat-lbl">Classes</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--info-light)"><i class="bi bi-mortarboard-fill" style="color:var(--info)"></i></div>
+            <div><div class="stat-val" id="statSession">—</div><div class="stat-lbl">Session</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--warning-light)"><i class="bi bi-calendar3" style="color:var(--warning)"></i></div>
+            <div><div class="stat-val" id="statTerm">—</div><div class="stat-lbl">Current Term</div></div>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-header"><h5><i class="bi bi-person-badge-fill"></i> Your Role</h5></div>
+            <div class="card-body">
+              <div id="dualRoleNotice" style="display:none;background:#eff6ff;border-left:4px solid #3b82f6;padding:10px 14px;border-radius:6px;font-size:.83rem;margin-bottom:12px">
+                <i class="bi bi-people-fill" style="color:#3b82f6"></i>
+                <strong> Dual Role Active</strong> — You can use both the <strong>Students/Remarks</strong> sections (Form Teacher) and the <strong>Enter Scores</strong> section (Subject Teacher) from the sidebar.
+              </div>
+              <div id="roleInfoCard" style="font-size:.88rem;color:var(--text-muted)">Loading…</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h5><i class="bi bi-lightning-fill"></i> Quick Access</h5></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
+              <button class="btn btn-outline btn-sm" id="qa-scores"><i class="bi bi-pencil-square"></i> Enter Scores</button>
+              <button class="btn btn-outline btn-sm" id="qa-broadsheet"><i class="bi bi-table"></i> View Broadsheet</button>
+              <button class="btn btn-outline btn-sm" id="qa-remarks" style="display:none"><i class="bi bi-chat-left-quote-fill"></i> Enter Remarks</button>
+              <button class="btn btn-outline btn-sm" id="qa-approval" style="display:none"><i class="bi bi-patch-check-fill"></i> Manage Approvals</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STUDENTS -->
+      <section class="section" id="section-students">
+        <div class="page-title"><i class="bi bi-people-fill" style="color:var(--primary)"></i> Students</div>
+        <div class="card">
+          <div class="card-header">
+            <h5><i class="bi bi-people-fill"></i> Student List</h5>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <select id="stuFilterClass" class="form-select" style="width:130px"></select>
+              <select id="stuFilterArm" class="form-select" style="width:90px">
+                <option value="">All Arms</option>
+                <option value="A">Arm A</option>
+                <option value="B">Arm B</option>
+              </select>
+              <input type="text" id="stuSearch" class="form-control" placeholder="Search…" style="width:160px"/>
+              <button class="btn btn-primary btn-sm" id="addStudentBtn"><i class="bi bi-plus-lg"></i> Add Student</button>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="table-wrap">
+              <table class="table">
+                <thead><tr>
+                  <th>Reg No.</th><th>Full Name</th><th>Class</th><th>Arm</th><th>Gender</th><th>Subjects Offered</th><th>Actions</th>
+                </tr></thead>
+                <tbody id="studentsTable"><tr><td colspan="7" class="text-center" style="padding:30px;color:var(--text-muted)">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SUBJECTS -->
+      <section class="section" id="section-subjects">
+        <div class="page-title"><i class="bi bi-book-fill" style="color:var(--primary)"></i> Class Subjects</div>
+        <div class="card">
+          <div class="card-header"><h5><i class="bi bi-book-fill"></i> Manage Subjects per Class & Term</h5></div>
+          <div class="card-body">
+            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">
+              Subjects are set per class (shared by Arm A and Arm B). These become the available subjects for score entry and broadsheet.
+            </p>
+            <div class="grid grid-2 mb-3">
+              <div class="form-group">
+                <label class="form-label">Class</label>
+                <select id="subjectClass" class="form-select"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Term</label>
+                <select id="subjectTerm" class="form-select">
+                  <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-outline btn-sm mb-3" id="loadSubjectsBtn"><i class="bi bi-arrow-clockwise"></i> Load Subjects</button>
+            <div id="subjectsList" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;min-height:36px"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input type="text" id="newSubjectInput" class="form-control" placeholder="e.g. Mathematics" style="max-width:260px"/>
+              <button class="btn btn-primary btn-sm" id="addSubjectChipBtn"><i class="bi bi-plus-lg"></i> Add</button>
+            </div>
+            <button class="btn btn-success mt-3" id="saveSubjectsBtn"><i class="bi bi-save"></i> Save Subjects</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCORES -->
+      <section class="section" id="section-scores">
+        <div class="page-title"><i class="bi bi-pencil-square" style="color:var(--primary)"></i> Enter Scores</div>
+        <div class="card mb-3">
+          <div class="card-header"><h5><i class="bi bi-funnel-fill"></i> Filter</h5></div>
+          <div class="card-body">
+            <div class="grid grid-4">
+              <div class="form-group">
+                <label class="form-label">Class Arm</label>
+                <select id="scoreClassArm" class="form-select"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Term</label>
+                <select id="scoreTerm" class="form-select">
+                  <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Subject</label>
+                <select id="scoreSubject" class="form-select"><option value="">Select Subject</option></select>
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end">
+                <button class="btn btn-primary" style="width:100%" id="loadScoresBtn"><i class="bi bi-arrow-clockwise"></i> Load</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="scoresCard" style="display:none">
+          <div class="card-header">
+            <h5 id="scoresCardTitle"><i class="bi bi-list-check"></i> Score Entry</h5>
+            <button class="btn btn-success btn-sm" id="saveScoresBtn"><i class="bi bi-cloud-upload-fill"></i> Save & Upload Scores</button>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="table-wrap">
+              <table class="table">
+                <thead><tr>
+                  <th>Reg No.</th><th>Student Name</th>
+                  <th style="text-align:center">1st Test <small style="opacity:.7">/20</small></th>
+                  <th style="text-align:center">2nd Test <small style="opacity:.7">/20</small></th>
+                  <th style="text-align:center">Exam <small style="opacity:.7">/60</small></th>
+                  <th style="text-align:center">Total</th>
+                  <th style="text-align:center">Grade</th>
+                </tr></thead>
+                <tbody id="scoresTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- BROADSHEET -->
+      <section class="section" id="section-broadsheet">
+        <div class="page-title"><i class="bi bi-table" style="color:var(--primary)"></i> Broadsheet</div>
+        <div class="card mb-3">
+          <div class="card-header"><h5><i class="bi bi-funnel-fill"></i> Filter</h5></div>
+          <div class="card-body">
+            <div class="grid grid-3">
+              <div class="form-group">
+                <label class="form-label">Class Arm</label>
+                <select id="bsClassArm" class="form-select"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Term</label>
+                <select id="bsTerm" class="form-select">
+                  <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+                </select>
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
+                <button class="btn btn-primary" style="flex:1" id="loadBroadsheetBtn"><i class="bi bi-arrow-clockwise"></i> Load</button>
+                <button class="btn btn-outline" id="printBroadsheetBtn" style="display:none" title="Print"><i class="bi bi-printer-fill"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="broadsheetCard" style="display:none">
+          <div class="card-header" id="broadsheetHeader">
+            <h5><i class="bi bi-table"></i> Class Broadsheet</h5>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="broadsheet-wrap">
+              <table class="broadsheet-table" id="broadsheetTable">
+                <thead id="broadsheetThead"></thead>
+                <tbody id="broadsheetTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- REMARKS -->
+      <section class="section" id="section-remarks">
+        <div class="page-title"><i class="bi bi-chat-left-quote-fill" style="color:var(--primary)"></i> Teacher Remarks</div>
+        <div class="card mb-3">
+          <div class="card-header"><h5><i class="bi bi-funnel-fill"></i> Filter</h5></div>
+          <div class="card-body">
+            <div class="grid grid-3">
+              <div class="form-group">
+                <label class="form-label">Class Arm</label>
+                <select id="remarkClassArm" class="form-select"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Term</label>
+                <select id="remarkTerm" class="form-select">
+                  <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+                </select>
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end">
+                <button class="btn btn-primary" style="width:100%" id="loadRemarksBtn"><i class="bi bi-arrow-clockwise"></i> Load Students</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="remarksCard" style="display:none">
+          <div class="card-header">
+            <h5 id="remarksCardTitle"><i class="bi bi-chat-left-quote-fill"></i> Remarks</h5>
+            <button class="btn btn-success btn-sm" id="saveRemarksBtn"><i class="bi bi-save"></i> Save All Remarks</button>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="table-wrap">
+              <table class="table">
+                <thead><tr><th>Reg No.</th><th>Student Name</th><th>Arm</th><th>Form Teacher's Remark</th></tr></thead>
+                <tbody id="remarksTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- APPROVALS -->
+      <section class="section" id="section-approval">
+        <div class="page-title"><i class="bi bi-patch-check-fill" style="color:var(--primary)"></i> Result Approvals</div>
+        <div class="card">
+          <div class="card-header">
+            <h5><i class="bi bi-patch-check-fill"></i> Approve / Revoke Class Arm Results</h5>
+          </div>
+          <div class="card-body">
+            <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px">
+              Approve a class arm to allow all students in it to view their results. Revoke to hide for all.
+            </p>
+            <div class="grid grid-2 mb-3">
+              <div class="form-group">
+                <label class="form-label">Term</label>
+                <select id="approvalTerm" class="form-select">
+                  <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+                </select>
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end">
+                <button class="btn btn-primary" style="width:100%" id="loadApprovalsBtn"><i class="bi bi-arrow-clockwise"></i> Load Status</button>
+              </div>
+            </div>
+            <div id="approvalsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="section" id="section-settings">
+        <div class="page-title"><i class="bi bi-gear-fill" style="color:var(--primary)"></i> Settings</div>
+        <div class="card">
+          <div class="card-header"><h5><i class="bi bi-calendar3"></i> Academic Session</h5></div>
+          <div class="card-body">
+            <div class="grid grid-2">
+              <div class="form-group">
+                <label class="form-label">Session</label>
+                <input type="text" id="sessionInput" class="form-control" placeholder="e.g. 2024/2025"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Current Term</label>
+                <select id="termInput" class="form-select">
+                  <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="saveSessionBtn"><i class="bi bi-save"></i> Save Session</button>
+          </div>
+        </div>
+
+        <!-- Data Repair Tool -->
+        <div class="card" style="margin-top:16px;border-color:var(--warning)">
+          <div class="card-header" style="background:#fffbeb">
+            <h5 style="color:#92400e"><i class="bi bi-wrench-adjustable-circle-fill"></i> Data Repair Tool</h5>
+          </div>
+          <div class="card-body">
+            <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">
+              If students were added before this fix, their <code>classArm</code> may be stored as <strong>"JS 1 A"</strong> instead of <strong>"JS 1A"</strong>. This causes subject teachers to see "no students found". Click below to auto-fix all student records in one go.
+            </p>
+            <button class="btn btn-warning" id="fixClassArmBtn" style="color:#92400e">
+              <i class="bi bi-wrench-adjustable"></i> Fix All Student classArm Values
+            </button>
+            <div id="fixClassArmResult" style="margin-top:10px;font-size:.85rem"></div>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- end main-content -->
+  </div><!-- end main-wrapper -->
+</div><!-- end app-layout -->
+
+<!-- ADD/EDIT STUDENT MODAL -->
+<div class="modal-backdrop" id="studentModal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <h5 id="studentModalTitle">Add Student</h5>
+      <button class="modal-close" data-close="studentModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="studentEditId"/>
+      <div class="grid grid-2">
+        <div class="form-group">
+          <label class="form-label">Registration Number <span style="color:red">*</span></label>
+          <input type="text" id="sRegNumber" class="form-control" placeholder="e.g. JS1A2024001" style="text-transform:uppercase"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Full Name <span style="color:red">*</span></label>
+          <input type="text" id="sFullName" class="form-control" placeholder="Surname Firstname"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Class <span style="color:red">*</span></label>
+          <select id="sClass" class="form-select">
+            <option value="">Select Class</option>
+            <option>JS 1</option><option>JS 2</option><option>JS 3</option>
+            <option>SS 1</option><option>SS 2</option><option>SS 3</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Arm <span style="color:red">*</span></label>
+          <select id="sArm" class="form-select">
+            <option value="A">A</option><option value="B">B</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Gender</label>
+          <select id="sGender" class="form-select">
+            <option value="">Select</option><option>Male</option><option>Female</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Subjects Offered -->
+      <div class="form-section-title"><i class="bi bi-book-fill"></i> Subjects Offered</div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:.88rem">
+          <input type="checkbox" id="sAllSubjects" style="width:16px;height:16px;accent-color:var(--primary)"/>
+          This student is offering ALL subjects for their class
+        </label>
+      </div>
+      <div id="specificSubjectsWrap" style="display:none">
+        <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:10px">
+          Select the specific subjects this student is offering:
+        </p>
+        <div id="subjectCheckboxes" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" data-close="studentModal">Cancel</button>
+      <button class="btn btn-primary" id="saveStudentBtn"><i class="bi bi-save"></i> Save Student</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM DELETE MODAL -->
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h5>Confirm Delete</h5>
+      <button class="modal-close" data-close="confirmModal">✕</button>
+    </div>
+    <div class="modal-body"><p id="confirmMsg" style="color:var(--text-muted)">Are you sure?</p></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" data-close="confirmModal">Cancel</button>
+      <button class="btn btn-danger" id="confirmDeleteBtn"><i class="bi bi-trash"></i> Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- TERM RESET MODAL -->
+<div class="modal-backdrop" id="resetModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h5><i class="bi bi-exclamation-triangle-fill" style="color:var(--warning)"></i> Term Reset</h5>
+      <button class="modal-close" data-close="resetModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning mb-3">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        This will permanently delete ALL scores, remarks and approvals for the selected term. Student records are kept.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Select Term to Reset</label>
+        <select id="resetTerm" class="form-select">
+          <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Type <strong>RESET</strong> to confirm</label>
+        <input type="text" id="resetConfirmInput" class="form-control" placeholder="RESET"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" data-close="resetModal">Cancel</button>
+      <button class="btn btn-danger" id="confirmResetBtn"><i class="bi bi-trash3-fill"></i> Reset Term Data</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="admin-dashboard.js"></script>
+</body>
+</html>
