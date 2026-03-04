@@ -315,9 +315,18 @@ async function init() {
 async function loadSession() {
   try {
     const s = await getSession();
+    const t = s.currentTerm || "1";
     $("statSession").textContent = s.session || "—";
-    $("statTerm").textContent    = TERM_LABELS[s.currentTerm] || "—";
-    if (_isMaster) { $("sessionInput").value = s.session||""; $("termInput").value = s.currentTerm||"1"; }
+    $("statTerm").textContent    = TERM_LABELS[t] || "—";
+
+    // Set current term on ALL term dropdowns across the dashboard
+    ["scoreTerm","subjectTerm","bsTerm","remarkTerm","approvalTerm","resetTerm"].forEach(id => {
+      const el = $(id); if (el) el.value = t;
+    });
+    if (_isMaster) {
+      $("sessionInput").value = s.session || "";
+      $("termInput").value    = t;
+    }
   } catch(e) { console.error(e); }
 }
 
