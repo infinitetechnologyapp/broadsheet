@@ -4,7 +4,7 @@
 // ============================================================
 import {
   onAuthChange, authLogout,
-  addStudent, updateStudent, deleteStudent,
+  addStudent, updateStudent, deleteStudent, changeStudentReg,
   getAllStudents, getStudentsByClassArm,
   saveScore, getScoresByClassArmSubjectTerm, getScoresByClassArmTerm,
   saveClassSubjects, getClassSubjects,
@@ -40,25 +40,25 @@ const FORM_TEACHERS = {
 // → Add: "js1teacher@brightschool.com": { subjects:["Basic Science"], classArms:["JS 1A","JS 1B"] }
 const SUBJECT_TEACHERS = {
   "brightunik12@gmail.com": {
-    subjects:  ["Civic Education", "PHE"],
-    classArms: ["JS 1A","JS 1B","JS 2A","JS 2B","JS 3A","JS 3B"]
+    subjects: ["Civic Education", "PHE"],
+    classArms: ["JS 1A", "JS 1B", "JS 2A", "JS 2B", "JS 3A", "JS 3B"]
   },
   "brightstephen02@gmail.com": {
-    subjects:  ["Chemistry", "Computer Science", "Data Processing"],
-    classArms: ["SS 1A","SS 1B","SS 2A","SS 2B","SS 3A","SS 3B"]
+    subjects: ["Chemistry", "Computer Science", "Data Processing"],
+    classArms: ["SS 1A", "SS 1B", "SS 2A", "SS 2B", "SS 3A", "SS 3B"]
   },
   "apostlesundaybaridole1986@gmail.com": {
-  subjects: ["Biology", "Civic Education", "Government"],
-  classArms: ["SS 1A", "SS 1B", "SS 2A", "SS 2B", "SS 3A", "SS 3B"]
-},
-"churoseanna58@gmail.com": {
-  subjects: ["Social Studies", "Computer Studies"],
-  classArms: ["JS 1A", "JS 1B", "JS 2A", "JS 2B", "JS 3A", "JS 3B"]
-},
-"chinonsohappiness2023@gmail.com": {
-subjects: ["Marketing", "Commerce", "CRS", "Financial Accounting", "Economics"],
-  classArms: ["SS 1A", "SS 1B", "SS 2A", "SS 2B", "SS 3A", "SS 3B"]
-},
+    subjects: ["Biology", "Civic Education", "Government"],
+    classArms: ["SS 1A", "SS 1B", "SS 2A", "SS 2B", "SS 3A", "SS 3B"]
+  },
+  "churoseanna58@gmail.com": {
+    subjects: ["Social Studies", "Computer Studies"],
+    classArms: ["JS 1A", "JS 1B", "JS 2A", "JS 2B", "JS 3A", "JS 3B"]
+  },
+  "chinonsohappiness2023@gmail.com": {
+    subjects: ["Marketing", "Commerce", "CRS", "Financial Accounting", "Economics"],
+    classArms: ["SS 1A", "SS 1B", "SS 2A", "SS 2B", "SS 3A", "SS 3B"]
+  },
   // DUAL-ROLE EXAMPLE — form teacher who also teaches a subject:
   // "js1teacher@brightschool.com": {
   //   subjects:  ["Basic Science"],
@@ -205,7 +205,7 @@ function applyRoleUI() {
   setDisplayFlex("nav-students",   _isMaster || _isFT);
   setDisplayFlex("nav-subjects",   _isMaster || _isFT);
   // FIX #5/#7: Scores tab shows for subject teachers (includes dual-role)
-  setDisplayFlex("nav-scores",     _isMaster || _isST);
+  setDisplayFlex("nav-scores",     _isMaster || _isST || _isFT);
   setDisplayFlex("nav-remarks",    _isMaster || _isFT);
   setDisplayFlex("nav-approval",   _isMaster);
   setDisplayFlex("nav-settings",   _isMaster);
@@ -214,7 +214,7 @@ function applyRoleUI() {
   // Quick access
   setDisplay("qa-remarks",  _isMaster || _isFT);
   setDisplay("qa-approval", _isMaster);
-  setDisplay("qa-scores",   _isMaster || _isST);
+  setDisplay("qa-scores",   _isMaster || _isST || _isFT);
 
   // Role info card
   const ri = $("roleInfoCard");
@@ -225,7 +225,7 @@ function applyRoleUI() {
     } else {
       let t = "";
       if (_isFT) t += `<strong style="color:var(--info)">Form Teacher</strong> — Class ${_ftClass} (Arms A &amp; B)<br>
-        Add/edit students, manage subjects, enter remarks, view broadsheet.<br><br>`;
+        Add/edit students, manage subjects, enter scores, enter remarks, view broadsheet.<br><br>`;
       if (_isST) t += `<strong style="color:var(--success)">Subject Teacher</strong><br>
         Subjects: <strong>${_stSubjects.join(", ")}</strong><br>
         Class Arms: ${_stArms.join(", ")}`;
@@ -246,9 +246,12 @@ function applyRoleUI() {
 function buildDropdowns() {
   function opts(arr) { return arr.map(v => `<option value="${v}">${v}</option>`).join(""); }
 
-  // ── Score entry arms: subject teacher's assigned arms ──────
-  // FIX #1 ROOT: for master show all; for ST show only their arms; FT-only gets none
-  const scoreArms = _isMaster ? ALL_ARMS : (_isST ? _stArms : []);
+  // Score arms: master sees all, ST sees assigned arms, FT sees their class arms
+  const ftArms = _isFT ? ALL_ARMS.filter(a => armToBase(a) === _ftClass) : [];
+  const scoreArms = _isMaster ? ALL_ARMS
+    : _isST && _isFT ? [...new Set([..._stArms, ...ftArms])]
+    : _isST ? _stArms
+    : ftArms;
   const scoreArmEl = $("scoreClassArm");
   if (scoreArmEl) {
     scoreArmEl.innerHTML = scoreArms.length
@@ -463,15 +466,26 @@ $("saveStudentBtn").addEventListener("click", async () => {
   const data = { regNumber: reg, fullName: name, classBase: cls, arm, classArm, gender, subjectsOffered };
   const btn = $("saveStudentBtn"); btn.disabled = true; btn.textContent = "Saving…";
   try {
-    if (editId) { await updateStudent(editId, data); toast("Student updated.", "success"); }
-    else        { await addStudent(data);             toast("Student added.",   "success"); }
+    if (editId) {
+      if (_isMaster && reg !== editId) {
+        // RegNumber changed — delete old doc, create new one
+        await changeStudentReg(editId, reg, data);
+        toast("Student updated with new reg number.", "success");
+      } else {
+        await updateStudent(editId, data);
+        toast("Student updated.", "success");
+      }
+    } else {
+      await addStudent(data);
+      toast("Student added.", "success");
+    }
     closeModal("studentModal");
     await loadStudents();
   } catch(e) { toast(e.message, "error"); }
   finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save"></i> Save Student'; }
 });
 
-// FIX #6: Admin can change class/arm; form teacher cannot
+// Admin can edit regNumber and class/arm; form teacher cannot
 window.editStudent = async function(reg) {
   const s = _students.find(x => x.regNumber === reg); if (!s) return;
   $("studentModalTitle").textContent = "Edit Student";
@@ -481,10 +495,10 @@ window.editStudent = async function(reg) {
   $("sClass").value        = s.classBase || "";
   $("sArm").value          = s.arm       || "A";
   $("sGender").value       = s.gender    || "";
-  $("sRegNumber").disabled = true;
-  // FIX #6: Admin — all fields open. Form teacher — cannot change class/arm
-  $("sClass").disabled = !_isMaster;
-  $("sArm").disabled   = !_isMaster;
+  // Admin — all fields open including regNumber. Form teacher — locked
+  $("sRegNumber").disabled = !_isMaster;
+  $("sClass").disabled     = !_isMaster;
+  $("sArm").disabled       = !_isMaster;
 
   const isAll = !s.subjectsOffered || s.subjectsOffered === "all";
   $("sAllSubjects").checked = isAll;
@@ -581,8 +595,9 @@ async function refreshSubjectDropdown() {
   sel.innerHTML = '<option value="">Loading…</option>';
   try {
     let subs = await getClassSubjects(classBase, term);
-    // FIX #1: Subject teacher only sees their own subjects
-    if (_isST && !_isMaster) subs = subs.filter(s => _stSubjects.includes(s));
+    // Subject teacher only sees their assigned subjects
+    // Form teacher and master see all subjects for the class
+    if (_isST && !_isMaster && !_isFT) subs = subs.filter(s => _stSubjects.includes(s));
     sel.innerHTML = subs.length
       ? '<option value="">Select Subject</option>' + subs.map(s => `<option value="${s}">${s}</option>`).join("")
       : '<option value="">No subjects found for this class/term</option>';
@@ -604,16 +619,22 @@ $("loadScoresBtn").addEventListener("click", async () => {
   if (!term)     { toast("Select a term.", "error"); return; }
   if (!subject)  { toast("Select a subject.", "error"); return; }
 
-  // FIX #7: Only subject teachers can upload scores
-  if (_isFT && !_isST && !_isMaster) {
-    toast("Only subject teachers can upload scores. You are a form teacher only.", "error"); return;
-  }
-  if (_isST && !_isMaster) {
-    if (!_stSubjects.includes(subject)) {
-      toast(`You are not authorized to enter scores for "${subject}".`, "error"); return;
-    }
-    if (!_stArms.includes(classArm)) {
-      toast(`You are not authorized to enter scores for ${classArm}.`, "error"); return;
+  // Form teachers can enter scores for their own class
+  // Subject teachers can only enter scores for their assigned subjects/arms
+  if (!_isMaster) {
+    if (_isFT && !_isST) {
+      // Form teacher only — can enter any subject for their class
+      if (armToBase(classArm) !== _ftClass) {
+        toast(`You can only enter scores for your class (${_ftClass}).`, "error"); return;
+      }
+    } else if (_isST) {
+      // Subject teacher — restricted to assigned subjects and arms
+      if (!_stSubjects.includes(subject)) {
+        toast(`You are not authorized to enter scores for "${subject}".`, "error"); return;
+      }
+      if (!_stArms.includes(classArm)) {
+        toast(`You are not authorized to enter scores for ${classArm}.`, "error"); return;
+      }
     }
   }
 

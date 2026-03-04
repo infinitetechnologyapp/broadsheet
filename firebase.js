@@ -39,6 +39,16 @@ export async function addStudent(data) {
 export async function updateStudent(reg, data) {
   await updateDoc(doc(db, "students", reg.toUpperCase()), { ...data, updatedAt: serverTimestamp() });
 }
+// Change regNumber — delete old doc, create new one with new ID
+export async function changeStudentReg(oldReg, newReg, data) {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, "students", oldReg.toUpperCase()));
+  batch.set(doc(db, "students", newReg.toUpperCase()), {
+    ...data, regNumber: newReg.toUpperCase(),
+    updatedAt: serverTimestamp()
+  });
+  await batch.commit();
+}
 export async function deleteStudent(reg) { await deleteDoc(doc(db, "students", reg.toUpperCase())); }
 export async function getAllStudents() {
   const snap = await getDocs(collection(db, "students"));
