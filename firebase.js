@@ -99,6 +99,21 @@ export async function getScoresByStudentTerm(regNumber, term) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+export async function getSubjectsBySection(section, term) {
+  // section: "JS", "SS", or "ALL"
+  const allClasses = ["JS 1","JS 2","JS 3","SS 1","SS 2","SS 3"];
+  const classes = section === "JS"  ? ["JS 1","JS 2","JS 3"]
+                : section === "SS"  ? ["SS 1","SS 2","SS 3"]
+                : allClasses;
+  const subjectSet = new Set();
+  await Promise.all(classes.map(async cls => {
+    const id   = `${cls}_${term}`.replace(/\s+/g, "_");
+    const snap = await getDoc(doc(db, "classSubjects", id));
+    if (snap.exists()) snap.data().subjects.forEach(s => subjectSet.add(s));
+  }));
+  return [...subjectSet].sort();
+}
+
 // CLASS SUBJECTS — stored per classBase shared by both arms
 export async function saveClassSubjects(classBase, term, subjects) {
   const id = `${classBase}_${term}`.replace(/\s+/g, "_");
@@ -145,6 +160,17 @@ export async function isResultApproved(classArm, term) {
 export async function getAllApprovals() {
   const snap = await getDocs(collection(db, "approvals"));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// TEACHER ROLES — saved/loaded from Firestore so admin can manage without editing code
+export async function saveTeachers(formTeachers, subjectTeachers) {
+  await setDoc(doc(db, "settings", "teachers"), {
+    formTeachers, subjectTeachers, updatedAt: serverTimestamp()
+  });
+}
+export async function getTeachers() {
+  const snap = await getDoc(doc(db, "settings", "teachers"));
+  return snap.exists() ? snap.data() : { formTeachers: {}, subjectTeachers: {} };
 }
 
 // SESSION

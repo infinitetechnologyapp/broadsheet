@@ -7,9 +7,9 @@ import {
   addStudent, updateStudent, deleteStudent, changeStudentReg,
   getAllStudents, getStudentsByClassArm,
   saveScore, getScoresByClassArmSubjectTerm, getScoresByClassArmTerm,
-  saveClassSubjects, getClassSubjects,
+  saveClassSubjects, getClassSubjects, getSubjectsBySection,
   saveRemark, getRemarksByClassArmTerm,
-  saveSession, getSession,
+  saveSession, getSession, saveTeachers, getTeachers,
   approveResults, revokeApproval, getAllApprovals,
   resetTermData, fixAllStudentClassArms
 } from "./firebase.js";
@@ -25,46 +25,10 @@ import {
 
 const MASTER_ADMIN = "infinitetechnology04@gmail.com";
 
-// ONE email per class — covers both Arm A and Arm B
-const FORM_TEACHERS = {
-  "js1teacher@brightschool.com": "JS 1",
-  "js2teacher@brightschool.com": "JS 2",
-  "churoseanna58@gmail.com": "JS 3",
-  "brightstephen04@gmail.com": "SS 1",
-  "apostlesundaybaridole1986@gmail.com": "SS 2",
-  "ss3teacher@brightschool.com": "SS 3",
-};
-
-// Subject teachers: subjects[] they teach + classArms[] they teach in
-// FIX #5 EXAMPLE: js1teacher also teaches Basic Science
-// → Add: "js1teacher@brightschool.com": { subjects:["Basic Science"], classArms:["JS 1A","JS 1B"] }
-const SUBJECT_TEACHERS = {
-  "brightunik12@gmail.com": {
-    subjects: ["Civic Education", "PHE"],
-    classArms: ["JS 1A", "JS 1B", "JS 2A", "JS 2B", "JS 3A", "JS 3B"]
-  },
-  "brightstephen02@gmail.com": {
-    subjects: ["Chemistry", "Computer Science", "Data Processing"],
-    classArms: ["SS 1A", "SS 1B", "SS 2A", "SS 2B", "SS 3A", "SS 3B"]
-  },
-  "apostlesundaybaridole1986@gmail.com": {
-    subjects: ["Biology", "Civic Education", "Government"],
-    classArms: ["SS 1A", "SS 1B", "SS 2A", "SS 2B", "SS 3A", "SS 3B"]
-  },
-  "churoseanna58@gmail.com": {
-    subjects: ["Social Studies", "Computer Studies"],
-    classArms: ["JS 1A", "JS 1B", "JS 2A", "JS 2B", "JS 3A", "JS 3B"]
-  },
-  "chinonsohappiness2023@gmail.com": {
-    subjects: ["Marketing", "Commerce", "CRS", "Financial Accounting", "Economics"],
-    classArms: ["SS 1A", "SS 1B", "SS 2A", "SS 2B", "SS 3A", "SS 3B"]
-  },
-  // DUAL-ROLE EXAMPLE — form teacher who also teaches a subject:
-  // "js1teacher@brightschool.com": {
-  //   subjects:  ["Basic Science"],
-  //   classArms: ["JS 1A","JS 1B"]
-  // },
-};
+// Teacher roles — loaded from Firestore at runtime by master admin
+// These start empty and get populated by loadTeachers() on init
+let FORM_TEACHERS    = {};
+let SUBJECT_TEACHERS = {};
 
 // ── Constants ─────────────────────────────────────────────────
 const ALL_ARMS    = ["JS 1A","JS 1B","JS 2A","JS 2B","JS 3A","JS 3B",
@@ -86,7 +50,9 @@ function resolveRole(email) {
   if (SUBJECT_TEACHERS[email]) {
     _isST       = true;
     _stSubjects = SUBJECT_TEACHERS[email].subjects  || [];
-    _stArms     = SUBJECT_TEACHERS[email].classArms || [];
+    const cfg   = SUBJECT_TEACHERS[email];
+    // Expand section to actual arms at runtime
+    _stArms = cfg.section ? sectionToArms(cfg.section, (cfg.classArms||[]).join(",")) : (cfg.classArms || []);
   }
   if (!_isMaster && !_isFT && !_isST) {
     toast("Your account is not authorized.", "error");
@@ -309,7 +275,19 @@ function buildDropdowns() {
 //  INIT
 // ══════════════════════════════════════════════════════════════
 async function init() {
+  await loadTeachers();
+  // Re-resolve role now that teachers are loaded from Firestore
+  if (_user) { resolveRole(_user.email); applyRoleUI(); }
   await Promise.allSettled([loadSession(), loadStudents()]);
+}
+
+async function loadTeachers() {
+  try {
+    const data = await getTeachers();
+    FORM_TEACHERS    = data.formTeachers    || {};
+    SUBJECT_TEACHERS = data.subjectTeachers || {};
+    renderTeacherRows();
+  } catch(e) { console.error("Could not load teachers:", e); }
 }
 
 async function loadSession() {
@@ -990,6 +968,141 @@ window.handleApproval = async function(classArm, term, approve) {
     $("loadApprovalsBtn").click();
   } catch(e) { toast(e.message, "error"); }
 };
+
+// ══════════════════════════════════════════════════════════════
+//  TEACHER MANAGEMENT — Master Admin only
+// ══════════════════════════════════════════════════════════════
+const JS_ARMS  = ["JS 1A","JS 1B","JS 2A","JS 2B","JS 3A","JS 3B"];
+const SS_ARMS  = ["SS 1A","SS 1B","SS 2A","SS 2B","SS 3A","SS 3B"];
+
+function sectionToArms(section, customArms) {
+  if (section === "JS")     return JS_ARMS;
+  if (section === "SS")     return SS_ARMS;
+  if (section === "ALL")    return ALL_ARMS;
+  if (section === "CUSTOM") return customArms.split(",").map(s => s.trim()).filter(Boolean);
+  return [];
+}
+
+function sectionLabel(section, classArms) {
+  if (section === "JS")  return "JS Section (all arms)";
+  if (section === "SS")  return "SS Section (all arms)";
+  if (section === "ALL") return "All Sections";
+  return classArms.join(", ");
+}
+  // Form teachers
+  const ftBody = $("ftTeacherBody");
+  if (ftBody) {
+    const entries = Object.entries(FORM_TEACHERS);
+    ftBody.innerHTML = entries.length ? entries.map(([email, cls], i) => `
+      <tr>
+        <td><input class="form-control form-control-sm ft-email" data-i="${i}" value="${email}" placeholder="teacher@email.com"/></td>
+        <td>
+          <select class="form-select form-select-sm ft-class" data-i="${i}">
+            ${ALL_CLASSES.map(c => `<option ${c===cls?"selected":""}>${c}</option>`).join("")}
+          </select>
+        </td>
+        <td><button class="btn btn-danger btn-sm" onclick="removeFT(${i})"><i class="bi bi-trash"></i></button></td>
+      </tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:12px">No form teachers added yet.</td></tr>`;
+  }
+
+  // Subject teachers
+  const stBody = $("stTeacherBody");
+  if (stBody) {
+    const entries = Object.entries(SUBJECT_TEACHERS);
+    stBody.innerHTML = entries.length ? entries.map(([email, cfg], i) => `
+      <tr>
+        <td style="font-size:.82rem;font-weight:700">${email}</td>
+        <td style="font-size:.82rem">${cfg.section === "JS" ? "Junior (JS)" : cfg.section === "SS" ? "Senior (SS)" : "Both (JS & SS)"}</td>
+        <td style="font-size:.82rem">${(cfg.subjects||[]).join(", ") || "—"}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="removeST(${i})"><i class="bi bi-trash"></i></button></td>
+      </tr>`).join("") : `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:12px">No subject teachers added yet.</td></tr>`;
+  };
+
+
+window.addFTRow = function() {
+  const email = $("newFTEmail").value.trim().toLowerCase();
+  const cls   = $("newFTClass").value;
+  if (!email || !cls) { toast("Enter email and class.", "error"); return; }
+  if (FORM_TEACHERS[email]) { toast("Email already added.", "error"); return; }
+  FORM_TEACHERS[email] = cls;
+  $("newFTEmail").value = "";
+  renderTeacherRows();
+};
+
+window.removeFT = function(i) {
+  const key = Object.keys(FORM_TEACHERS)[i];
+  if (key) delete FORM_TEACHERS[key];
+  renderTeacherRows();
+};
+
+window.loadSTSubjects = async function() {
+  const section = $("newSTSection").value;
+  const term    = $("scoreTerm")?.value || "1";
+  if (!section) { toast("Select a section first.", "error"); return; }
+  const btn = $("loadSTSubjectsBtn");
+  btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading…';
+  try {
+    const subjects = await getSubjectsBySection(section, term);
+    const wrap = $("stSubjectsCheckboxWrap");
+    if (!subjects.length) {
+      wrap.innerHTML = `<span style="font-size:.82rem;color:var(--text-muted)">No subjects found for ${section} section. Make sure subjects are saved in the Subjects section first.</span>`;
+    } else {
+      wrap.innerHTML = subjects.map(s =>
+        `<label style="display:flex;align-items:center;gap:6px;font-size:.83rem;font-weight:700;cursor:pointer;background:var(--white);padding:6px 10px;border-radius:6px;border:1.5px solid var(--border)">
+          <input type="checkbox" class="st-sub-check" value="${s}" style="accent-color:var(--primary);width:15px;height:15px"/> ${s}
+        </label>`
+      ).join("");
+    }
+    wrap.style.display = "flex";
+    $("loadSTSubjectsHint").textContent = `${subjects.length} subject(s) loaded for ${section} section`;
+  } catch(e) { toast(e.message, "error"); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Subjects'; }
+};
+
+window.addSTRow = function() {
+  const email   = $("newSTEmail").value.trim().toLowerCase();
+  const section = $("newSTSection").value;
+  const checked = Array.from(document.querySelectorAll(".st-sub-check:checked")).map(c => c.value);
+  if (!email)        { toast("Enter teacher email.", "error"); return; }
+  if (!section)      { toast("Select a section.", "error"); return; }
+  if (!checked.length) { toast("Select at least one subject.", "error"); return; }
+  const arms = sectionToArms(section, "");
+  SUBJECT_TEACHERS[email] = { subjects: checked, classArms: arms, section };
+  $("newSTEmail").value  = "";
+  $("newSTSection").value = "";
+  $("stSubjectsCheckboxWrap").style.display = "none";
+  $("stSubjectsCheckboxWrap").innerHTML = "";
+  $("loadSTSubjectsHint").textContent = "Select a section first, then load subjects";
+  renderTeacherRows();
+  toast(`${email} added as subject teacher.`, "success");
+};
+
+window.removeST = function(i) {
+  const key = Object.keys(SUBJECT_TEACHERS)[i];
+  if (key) delete SUBJECT_TEACHERS[key];
+  renderTeacherRows();
+};
+
+$("saveTeachersBtn")?.addEventListener("click", async () => {
+  // Collect latest form teacher inputs from table
+  const emails  = document.querySelectorAll(".ft-email");
+  const classes = document.querySelectorAll(".ft-class");
+  const ft = {};
+  emails.forEach((el, i) => {
+    const email = el.value.trim().toLowerCase();
+    const cls   = classes[i]?.value;
+    if (email && cls) ft[email] = cls;
+  });
+  FORM_TEACHERS = ft;
+
+  const btn = $("saveTeachersBtn"); btn.disabled = true; btn.textContent = "Saving…";
+  try {
+    await saveTeachers(FORM_TEACHERS, SUBJECT_TEACHERS);
+    toast("Teacher roles saved successfully.", "success");
+    renderTeacherRows();
+  } catch(e) { toast(e.message, "error"); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save"></i> Save All Teacher Roles'; }
+});
 
 // ══════════════════════════════════════════════════════════════
 //  SETTINGS  — Master Admin only

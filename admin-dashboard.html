@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Admin Dashboard — Recomella Academy</title>
+  <title>Admin Dashboard — BrightSchool Broadsheet</title>
   <link rel="stylesheet" href="./style.css"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -13,8 +13,8 @@
 
 <!-- Auth loading overlay — hidden once Firebase confirms session -->
 <div id="authLoadingOverlay" style="position:fixed;inset:0;background:#f1f5f9;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px">
-  <div style="width:52px;height:52px;border-radius:14px;background:#4f46e5;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;color:#fff">RA</div>
-  <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;color:#1e293b">Recomella Academy</div>
+  <div style="width:52px;height:52px;border-radius:14px;background:#4f46e5;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;color:#fff">B</div>
+  <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;color:#1e293b">BrightSchool</div>
   <div style="width:36px;height:36px;border:4px solid #e0e7ff;border-top-color:#4f46e5;border-radius:50%;animation:spin .8s linear infinite"></div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 </div>
@@ -26,9 +26,9 @@
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
-      <div class="brand-icon">RA</div>
+      <div class="brand-icon">B</div>
       <div class="brand-text">
-        <div>Recomella Academy</div>
+        <div>BrightSchool</div>
         <div class="brand-sub">Result Broadsheet</div>
       </div>
     </div>
@@ -347,6 +347,102 @@
               </div>
             </div>
             <button class="btn btn-primary" id="saveSessionBtn"><i class="bi bi-save"></i> Save Session</button>
+          </div>
+        </div>
+
+        <!-- Teacher Management -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-header">
+            <h5><i class="bi bi-people-fill" style="color:var(--primary)"></i> Form Teacher Roles</h5>
+          </div>
+          <div class="card-body">
+            <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">
+              Assign teacher emails to classes. Each form teacher can add students, enter scores and remarks for their class (Arms A &amp; B).
+            </p>
+
+            <!-- Add new form teacher -->
+            <div class="grid grid-3 mb-3" style="align-items:flex-end">
+              <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">Teacher Email</label>
+                <input type="email" id="newFTEmail" class="form-control" placeholder="teacher@email.com"/>
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">Class</label>
+                <select id="newFTClass" class="form-select">
+                  <option value="">Select Class</option>
+                  <option>JS 1</option><option>JS 2</option><option>JS 3</option>
+                  <option>SS 1</option><option>SS 2</option><option>SS 3</option>
+                </select>
+              </div>
+              <button class="btn btn-success btn-sm" onclick="addFTRow()" style="height:38px">
+                <i class="bi bi-plus-circle"></i> Add
+              </button>
+            </div>
+
+            <!-- Existing form teachers table -->
+            <div class="table-wrap">
+              <table class="table">
+                <thead><tr><th>Email</th><th>Class</th><th></th></tr></thead>
+                <tbody id="ftTeacherBody"></tbody>
+              </table>
+            </div>
+
+            <button class="btn btn-primary mt-3" id="saveTeachersBtn">
+              <i class="bi bi-save"></i> Save All Teacher Roles
+            </button>
+          </div>
+        </div>
+
+        <!-- Subject Teacher Management -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-header">
+            <h5><i class="bi bi-book-fill" style="color:var(--success)"></i> Subject Teacher Roles</h5>
+          </div>
+          <div class="card-body">
+            <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px">
+              Add a subject teacher by entering their email, selecting their section, loading the subjects saved for that section, then choosing which subjects they teach.
+            </p>
+
+            <div class="grid grid-2 mb-2">
+              <div class="form-group">
+                <label class="form-label">Teacher Email</label>
+                <input type="email" id="newSTEmail" class="form-control" placeholder="teacher@email.com"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Section</label>
+                <select id="newSTSection" class="form-select">
+                  <option value="">Select Section</option>
+                  <option value="JS">Junior Secondary (JS)</option>
+                  <option value="SS">Senior Secondary (SS)</option>
+                  <option value="ALL">Both Sections (JS &amp; SS)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group mb-3">
+              <label class="form-label">Subjects</label>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                <button class="btn btn-outline btn-sm" id="loadSTSubjectsBtn" onclick="loadSTSubjects()">
+                  <i class="bi bi-arrow-clockwise"></i> Load Subjects
+                </button>
+                <span id="loadSTSubjectsHint" style="font-size:.78rem;color:var(--text-muted)">Select a section first, then load subjects</span>
+              </div>
+              <div id="stSubjectsCheckboxWrap" style="display:none;flex-wrap:wrap;gap:8px;padding:12px;background:var(--bg);border-radius:8px;border:1.5px solid var(--border)">
+                <!-- Checkboxes populated dynamically -->
+              </div>
+            </div>
+
+            <button class="btn btn-success btn-sm" onclick="addSTRow()">
+              <i class="bi bi-plus-circle"></i> Add Subject Teacher
+            </button>
+
+            <!-- Existing subject teachers table -->
+            <div class="table-wrap" style="margin-top:16px">
+              <table class="table">
+                <thead><tr><th>Email</th><th>Section</th><th>Subjects</th><th></th></tr></thead>
+                <tbody id="stTeacherBody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
