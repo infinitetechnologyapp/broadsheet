@@ -162,15 +162,43 @@ export async function getAllApprovals() {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-// TEACHER ROLES — saved/loaded from Firestore so admin can manage without editing code
+// TEACHER ROLES — stored as arrays to avoid dot-in-email Firestore key issue
 export async function saveTeachers(formTeachers, subjectTeachers) {
+  const ftArray = Object.entries(formTeachers).map(([email, cls]) => ({ email, cls }));
+  // Store classArms as comma-separated string — Firestore doesn't support nested arrays
+  const stArray = Object.entries(subjectTeachers).map(([email, cfg]) => ({
+    email,
+    subjects:  (cfg.subjects  || []).join(","),
+    classArms: (cfg.classArms || []).join(","),
+    section:   cfg.section || ""
+  }));
   await setDoc(doc(db, "settings", "teachers"), {
-    formTeachers, subjectTeachers, updatedAt: serverTimestamp()
+    formTeachers: ftArray, subjectTeachers: stArray, updatedAt: serverTimestamp()
   });
 }
 export async function getTeachers() {
   const snap = await getDoc(doc(db, "settings", "teachers"));
-  return snap.exists() ? snap.data() : { formTeachers: {}, subjectTeachers: {} };
+  if (!snap.exists()) {
+    console.log("getTeachers: document does not exist");
+    return { formTeachers: {}, subjectTeachers: {} };
+  }
+  const raw = snap.data();
+  console.log("getTeachers raw:", JSON.stringify(raw));
+  const ft = {}, st = {};
+  (raw.formTeachers || []).forEach(t => {
+    if (t.email) ft[t.email.toLowerCase().trim()] = t.cls;
+  });
+  (raw.subjectTeachers || []).forEach(t => {
+    if (t.email) {
+      st[t.email.toLowerCase().trim()] = {
+        subjects:  t.subjects  ? t.subjects.split(",").map(s => s.trim()).filter(Boolean)  : [],
+        classArms: t.classArms ? t.classArms.split(",").map(s => s.trim()).filter(Boolean) : [],
+        section:   t.section || ""
+      };
+    }
+  });
+  console.log("getTeachers parsed — FT:", JSON.stringify(ft), "ST:", JSON.stringify(st));
+  return { formTeachers: ft, subjectTeachers: st };
 }
 
 // SESSION

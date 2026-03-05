@@ -23,7 +23,7 @@ import {
 //  → Dashboard will show them BOTH sections simultaneously
 // ══════════════════════════════════════════════════════════════
 
-const MASTER_ADMIN = "infinitetechnology04@gmail.com";
+const MASTER_ADMIN = "infinitetechnology04@gmail.com".toLowerCase();
 
 // Teacher roles — loaded from Firestore at runtime by master admin
 // These start empty and get populated by loadTeachers() on init
@@ -43,18 +43,28 @@ let _user = null, _isMaster = false, _isFT = false, _isST = false;
 let _ftClass = null, _stSubjects = [], _stArms = [];
 
 function resolveRole(email) {
+  const e = (email || "").toLowerCase().trim();
   _isMaster = _isFT = _isST = false;
   _ftClass = null; _stSubjects = []; _stArms = [];
-  if (email === MASTER_ADMIN) { _isMaster = true; return; }
-  if (FORM_TEACHERS[email])    { _isFT = true; _ftClass = FORM_TEACHERS[email]; }
-  if (SUBJECT_TEACHERS[email]) {
+
+  const ftKeys = Object.keys(FORM_TEACHERS);
+  const stKeys = Object.keys(SUBJECT_TEACHERS);
+  console.log("resolveRole — login email:", JSON.stringify(e));
+  console.log("FT keys:", JSON.stringify(ftKeys));
+  console.log("ST keys:", JSON.stringify(stKeys));
+  console.log("ST email match:", stKeys.map(k => `'${k}'==='${e}'? ${k===e}`));
+
+  if (e === MASTER_ADMIN) { _isMaster = true; console.log("Role: MASTER"); return; }
+  if (FORM_TEACHERS[e])   { _isFT = true; _ftClass = FORM_TEACHERS[e]; console.log("Role: FT →", _ftClass); }
+  if (SUBJECT_TEACHERS[e]) {
     _isST       = true;
-    _stSubjects = SUBJECT_TEACHERS[email].subjects  || [];
-    const cfg   = SUBJECT_TEACHERS[email];
-    // Expand section to actual arms at runtime
-    _stArms = cfg.section ? sectionToArms(cfg.section, (cfg.classArms||[]).join(",")) : (cfg.classArms || []);
+    const cfg   = SUBJECT_TEACHERS[e];
+    _stSubjects = cfg.subjects  || [];
+    _stArms     = cfg.classArms || [];
+    console.log("Role: ST — subjects:", _stSubjects, "arms:", _stArms);
   }
   if (!_isMaster && !_isFT && !_isST) {
+    console.error("NOT AUTHORIZED — no role found for:", e);
     toast("Your account is not authorized.", "error");
     setTimeout(() => authLogout(), 2500);
   }
@@ -131,17 +141,28 @@ document.querySelectorAll(".nav-item").forEach(item => item.addEventListener("cl
 let _students = [];
 let _authResolved = false;
 
-onAuthChange(user => {
+onAuthChange(async user => {
   _authResolved = true;
-  // Hide loading overlay
   const overlay = $("authLoadingOverlay");
-  if (overlay) overlay.style.display = "none";
 
-  if (!user) { window.location.href = "admin-login.html"; return; }
+  if (!user) {
+    if (overlay) overlay.style.display = "none";
+    window.location.href = "admin-login.html";
+    return;
+  }
+
+  // Load teachers FIRST — retry once if it fails
+  try { await loadTeachers(); } catch(e) {
+    console.warn("loadTeachers failed, retrying…", e);
+    await new Promise(r => setTimeout(r, 1500));
+    try { await loadTeachers(); } catch(e2) { console.error("loadTeachers retry failed:", e2); }
+  }
+
   _user = user;
   resolveRole(user.email);
   applyRoleUI();
-  init();
+  if (overlay) overlay.style.display = "none";
+  await Promise.allSettled([loadSession(), loadStudents()]);
 });
 
 // Safety: if Firebase auth takes too long, don't leave user on blank screen
@@ -212,12 +233,12 @@ function applyRoleUI() {
 function buildDropdowns() {
   function opts(arr) { return arr.map(v => `<option value="${v}">${v}</option>`).join(""); }
 
-  // Score arms: master sees all, ST sees assigned arms, FT sees their class arms
-  const ftArms = _isFT ? ALL_ARMS.filter(a => armToBase(a) === _ftClass) : [];
+  // Score arms: master/ST sees all arms (ST can enter scores in any class for their subject)
+  // FT sees only their class arms
+  const ftArms    = _isFT ? ALL_ARMS.filter(a => armToBase(a) === _ftClass) : [];
   const scoreArms = _isMaster ? ALL_ARMS
-    : _isST && _isFT ? [...new Set([..._stArms, ...ftArms])]
-    : _isST ? _stArms
-    : ftArms;
+    : _isST ? ALL_ARMS           // subject teachers can select any class
+    : ftArms;                    // form teachers limited to their class
   const scoreArmEl = $("scoreClassArm");
   if (scoreArmEl) {
     scoreArmEl.innerHTML = scoreArms.length
@@ -275,19 +296,22 @@ function buildDropdowns() {
 //  INIT
 // ══════════════════════════════════════════════════════════════
 async function init() {
-  await loadTeachers();
-  // Re-resolve role now that teachers are loaded from Firestore
-  if (_user) { resolveRole(_user.email); applyRoleUI(); }
   await Promise.allSettled([loadSession(), loadStudents()]);
 }
 
 async function loadTeachers() {
   try {
     const data = await getTeachers();
-    FORM_TEACHERS    = data.formTeachers    || {};
-    SUBJECT_TEACHERS = data.subjectTeachers || {};
-    renderTeacherRows();
-  } catch(e) { console.error("Could not load teachers:", e); }
+    FORM_TEACHERS    = (data && data.formTeachers)    ? data.formTeachers    : {};
+    SUBJECT_TEACHERS = (data && data.subjectTeachers) ? data.subjectTeachers : {};
+    console.log("Teachers loaded — FT:", Object.keys(FORM_TEACHERS), "ST:", Object.keys(SUBJECT_TEACHERS));
+  } catch(e) {
+    console.error("loadTeachers failed:", e);
+    // Don't leave as undefined — keep as empty objects
+    FORM_TEACHERS    = FORM_TEACHERS    || {};
+    SUBJECT_TEACHERS = SUBJECT_TEACHERS || {};
+  }
+  renderTeacherRows();
 }
 
 async function loadSession() {
@@ -322,7 +346,9 @@ async function loadStudents() {
 function renderStudentTable(list) {
   const tbody = $("studentsTable");
   const pool  = _isMaster ? list
-    : _isFT ? list.filter(s => s.classBase === _ftClass)
+    : _isFT && _isST ? list.filter(s => s.classBase === _ftClass || _stArms.includes(s.classArm))
+    : _isFT  ? list.filter(s => s.classBase === _ftClass)
+    : _isST  ? list.filter(s => _stArms.includes(s.classArm))
     : [];
   if (!pool.length) {
     tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="padding:30px;color:var(--text-muted)">No students found.</td></tr>`;
@@ -582,8 +608,7 @@ async function refreshSubjectDropdown() {
   sel.innerHTML = '<option value="">Loading…</option>';
   try {
     let subs = await getClassSubjects(classBase, term);
-    // Subject teacher only sees their assigned subjects
-    // Form teacher and master see all subjects for the class
+    // Only pure subject teachers (not form teachers) get subject filtering
     if (_isST && !_isMaster && !_isFT) subs = subs.filter(s => _stSubjects.includes(s));
     sel.innerHTML = subs.length
       ? '<option value="">Select Subject</option>' + subs.map(s => `<option value="${s}">${s}</option>`).join("")
@@ -606,21 +631,24 @@ $("loadScoresBtn").addEventListener("click", async () => {
   if (!term)     { toast("Select a term.", "error"); return; }
   if (!subject)  { toast("Select a subject.", "error"); return; }
 
-  // Form teachers can enter scores for their own class
-  // Subject teachers can only enter scores for their assigned subjects/arms
+  // Authorization check
   if (!_isMaster) {
     if (_isFT && !_isST) {
-      // Form teacher only — can enter any subject for their class
+      // Form teacher — any subject, but only their own class
       if (armToBase(classArm) !== _ftClass) {
         toast(`You can only enter scores for your class (${_ftClass}).`, "error"); return;
       }
-    } else if (_isST) {
-      // Subject teacher — restricted to assigned subjects and arms
+    } else if (_isST && !_isFT) {
+      // Subject teacher — any class/arm is fine, but only their assigned subjects
       if (!_stSubjects.includes(subject)) {
-        toast(`You are not authorized to enter scores for "${subject}".`, "error"); return;
+        toast(`You are not assigned to teach "${subject}".`, "error"); return;
       }
-      if (!_stArms.includes(classArm)) {
-        toast(`You are not authorized to enter scores for ${classArm}.`, "error"); return;
+    } else if (_isFT && _isST) {
+      // Dual role — any subject in FT class, OR assigned subjects in any arm
+      const inFTClass = armToBase(classArm) === _ftClass;
+      const inSTSub   = _stSubjects.includes(subject);
+      if (!inFTClass && !inSTSub) {
+        toast(`Not authorized for this class/subject combination.`, "error"); return;
       }
     }
   }
@@ -630,11 +658,9 @@ $("loadScoresBtn").addEventListener("click", async () => {
     // FIX #8: Always fresh fetch — this gives us fullName + all fields
     const all = await getStudentsByClassArm(classArm);
 
-    // FIX #3: Only students offering this subject appear
-    _scoreStudents = all.filter(s => {
-      if (!s.subjectsOffered || s.subjectsOffered === "all") return true;
-      return Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(subject);
-    }).sort((a, b) => (a.fullName||"").localeCompare(b.fullName||""));
+    // Load ALL students in the class arm — subject teacher enters scores for all students
+    // subjectsOffered is only used on the broadsheet output, not for score entry
+    _scoreStudents = all.sort((a, b) => (a.fullName||"").localeCompare(b.fullName||""));
 
     // Load existing saved scores
     const saved = await getScoresByClassArmSubjectTerm(classArm, subject, term);
@@ -649,8 +675,8 @@ $("loadScoresBtn").addEventListener("click", async () => {
 
     toast(
       _scoreStudents.length
-        ? `${_scoreStudents.length} student(s) loaded for ${subject}.`
-        : `No students in ${classArm} are offering "${subject}".`,
+        ? `${_scoreStudents.length} student(s) loaded for ${classArm}.`
+        : `No students found in ${classArm}. Add students first.`,
       _scoreStudents.length ? "success" : "warning"
     );
   } catch(e) { toast(e.message, "error"); console.error(e); }
@@ -663,8 +689,8 @@ function renderScoreTable(classArm, subject, term) {
   if (!_scoreStudents.length) {
     tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="padding:36px;color:var(--text-muted)">
       <i class="bi bi-inbox" style="font-size:2rem;display:block;margin-bottom:10px"></i>
-      No students in <strong>${classArm}</strong> offering <strong>${subject}</strong>.
-      <br><small>Check student subject registration in the Students section.</small>
+      No students found in <strong>${classArm}</strong>.
+      <br><small>Make sure students have been added to this class.</small>
     </td></tr>`;
     return;
   }
@@ -989,6 +1015,10 @@ function sectionLabel(section, classArms) {
   if (section === "ALL") return "All Sections";
   return classArms.join(", ");
 }
+
+function renderTeacherRows() {
+  if (!_isMaster) return; // Only master admin sees settings — bail silently for teachers
+
   // Form teachers
   const ftBody = $("ftTeacherBody");
   if (ftBody) {
@@ -1016,8 +1046,8 @@ function sectionLabel(section, classArms) {
         <td style="font-size:.82rem">${(cfg.subjects||[]).join(", ") || "—"}</td>
         <td><button class="btn btn-danger btn-sm" onclick="removeST(${i})"><i class="bi bi-trash"></i></button></td>
       </tr>`).join("") : `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:12px">No subject teachers added yet.</td></tr>`;
-  };
-
+  }
+}
 
 window.addFTRow = function() {
   const email = $("newFTEmail").value.trim().toLowerCase();
@@ -1063,16 +1093,21 @@ window.addSTRow = function() {
   const email   = $("newSTEmail").value.trim().toLowerCase();
   const section = $("newSTSection").value;
   const checked = Array.from(document.querySelectorAll(".st-sub-check:checked")).map(c => c.value);
-  if (!email)        { toast("Enter teacher email.", "error"); return; }
-  if (!section)      { toast("Select a section.", "error"); return; }
+  if (!email)          { toast("Enter teacher email.", "error"); return; }
+  if (!section)        { toast("Select a section.", "error"); return; }
   if (!checked.length) { toast("Select at least one subject.", "error"); return; }
-  const arms = sectionToArms(section, "");
+
+  // Expand arms immediately at save time — no runtime expansion needed
+  const arms = section === "JS"  ? [...JS_ARMS]
+             : section === "SS"  ? [...SS_ARMS]
+             : [...ALL_ARMS]; // ALL
+
   SUBJECT_TEACHERS[email] = { subjects: checked, classArms: arms, section };
-  $("newSTEmail").value  = "";
-  $("newSTSection").value = "";
+  $("newSTEmail").value    = "";
+  $("newSTSection").value  = "";
   $("stSubjectsCheckboxWrap").style.display = "none";
-  $("stSubjectsCheckboxWrap").innerHTML = "";
-  $("loadSTSubjectsHint").textContent = "Select a section first, then load subjects";
+  $("stSubjectsCheckboxWrap").innerHTML     = "";
+  $("loadSTSubjectsHint").textContent       = "Select a section first, then load subjects";
   renderTeacherRows();
   toast(`${email} added as subject teacher.`, "success");
 };
@@ -1084,7 +1119,7 @@ window.removeST = function(i) {
 };
 
 $("saveTeachersBtn")?.addEventListener("click", async () => {
-  // Collect latest form teacher inputs from table
+  // Rebuild FORM_TEACHERS from live table inputs
   const emails  = document.querySelectorAll(".ft-email");
   const classes = document.querySelectorAll(".ft-class");
   const ft = {};
@@ -1094,14 +1129,19 @@ $("saveTeachersBtn")?.addEventListener("click", async () => {
     if (email && cls) ft[email] = cls;
   });
   FORM_TEACHERS = ft;
-
+  console.log("Saving — FT:", JSON.stringify(FORM_TEACHERS), "ST:", JSON.stringify(SUBJECT_TEACHERS));
   const btn = $("saveTeachersBtn"); btn.disabled = true; btn.textContent = "Saving…";
   try {
     await saveTeachers(FORM_TEACHERS, SUBJECT_TEACHERS);
-    toast("Teacher roles saved successfully.", "success");
+    toast("Teacher roles saved successfully. ✓", "success");
     renderTeacherRows();
-  } catch(e) { toast(e.message, "error"); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save"></i> Save All Teacher Roles'; }
+  } catch(e) { console.error("saveTeachers error:", e); toast("Save failed: " + e.message, "error"); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save"></i> Save Teacher Roles'; }
+});
+
+$("saveSTBtn")?.addEventListener("click", async () => {
+  // Same as saveTeachersBtn — saves everything together
+  $("saveTeachersBtn")?.click();
 });
 
 // ══════════════════════════════════════════════════════════════
