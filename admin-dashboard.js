@@ -225,6 +225,7 @@ function applyRoleUI() {
   if (dn) dn.style.display = (_isFT && _isST) ? "block" : "none";
 
   buildDropdowns();
+  renderTeacherRows(); // Populate teacher tables now that _isMaster is resolved
 }
 
 // ══════════════════════════════════════════════════════════════
