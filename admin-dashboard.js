@@ -322,7 +322,7 @@ async function loadTeachers() {
 
 // School identity state
 let _schoolName = "Recomella Academy";
-let _schoolLogo = "./logo.png"; // loaded directly from project folder
+let _schoolLogo = "./logo.png";
 
 async function loadSession() {
   try {
@@ -804,7 +804,7 @@ $("loadBroadsheetBtn").addEventListener("click", async () => {
     if (!subjects.length) { toast("No subjects set up for this class/term yet.", "warning"); return; }
     renderBroadsheet(classArm, term, students, allScores, subjects);
     $("broadsheetCard").style.display  = "block";
-    $("downloadPdfBtn").style.display  = "inline-flex";
+    $("downloadExcelBtn").style.display = "inline-flex";
   } catch(e) { toast(e.message, "error"); console.error(e); }
   finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load'; }
 });
@@ -918,21 +918,16 @@ function renderBroadsheet(classArm, term, students, allScores, subjects) {
   $("broadsheetTbody").innerHTML = tbody;
 }
 
-$("downloadPdfBtn").addEventListener("click", async () => {
+$("downloadExcelBtn").addEventListener("click", async () => {
   const classArm  = $("bsClassArm").value;
   const term      = $("bsTerm").value;
   const classBase = armToBase(classArm);
   if (!classArm || !term) { toast("Load broadsheet first.", "error"); return; }
 
-  const btn = $("downloadPdfBtn");
+  const btn = $("downloadExcelBtn");
   btn.disabled = true; btn.textContent = "Generating…";
 
   try {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pw  = doc.internal.pageSize.getWidth();
-    const ph  = doc.internal.pageSize.getHeight();
-
     // ── Fetch live data ──────────────────────────────────────
     const [students, allScores, subjects, sessionData] = await Promise.all([
       getStudentsByClassArm(classArm),
@@ -941,7 +936,6 @@ $("downloadPdfBtn").addEventListener("click", async () => {
       getSession()
     ]);
 
-    // Find form teacher email for this class
     const ftEmail = Object.entries(FORM_TEACHERS).find(([, cls]) => cls === classBase)?.[0] || "—";
 
     // Build score lookup
@@ -966,106 +960,95 @@ $("downloadPdfBtn").addEventListener("click", async () => {
     const posMap = {};
     [...rows].sort((a,b) => b.grand - a.grand).forEach((r, i) => { posMap[r.regNumber] = ordinal(i+1); });
 
-    // ── HEADER ───────────────────────────────────────────────
-    let y = 14;
+    // Total columns count for merges
+    const totalCols = 3 + (subjects.length * 5) + 3; // S/N + Name + Reg + subjects*5 + Grand+Avg+Pos
 
-    // Load logo.png from project folder
-    try {
-      const logoResp = await fetch("./logo.png");
-      if (logoResp.ok) {
-        const blob   = await logoResp.blob();
-        const reader = new FileReader();
-        const b64    = await new Promise(res => { reader.onload = e => res(e.target.result); reader.readAsDataURL(blob); });
-        doc.addImage(b64, "PNG", 10, 5, 20, 20);
-      }
-    } catch(e) { /* logo not found — skip */ }
+    // ── BUILD WORKSHEET DATA ─────────────────────────────────
+    const wsData = [];
 
-    doc.setFontSize(16); doc.setFont("helvetica", "bold");
-    doc.text((_schoolName || "BrightSchool").toUpperCase(), pw / 2, y, { align: "center" });
-    y += 6;
-    doc.setFontSize(9); doc.setFont("helvetica", "bold");
-    doc.text("RESULT BROADSHEET", pw / 2, y, { align: "center" });
-    y += 6;
-    doc.setFontSize(9); doc.setFont("helvetica", "normal");
-    doc.text(`Session: ${sessionData.session || "—"}   |   Term: ${TERM_LABELS[term]}   |   Class: ${classArm}`, pw / 2, y, { align: "center" });
-    y += 5;
-    doc.text(`Form Teacher: ${ftEmail}`, pw / 2, y, { align: "center" });
-    y += 4;
-    doc.setDrawColor(79, 70, 229);
-    doc.setLineWidth(0.5);
-    doc.line(10, y, pw - 10, y);
-    y += 4;
+    // ── HEADER ROWS ──────────────────────────────────────────
+    wsData.push([(_schoolName || "BrightSchool").toUpperCase()]);
+    wsData.push(["RESULT BROADSHEET"]);
+    wsData.push([`Session: ${sessionData.session || "—"}   |   Term: ${TERM_LABELS[term]}   |   Class: ${classArm}`]);
+    wsData.push([`Form Teacher: ${ftEmail}`]);
+    wsData.push([]); // blank spacer
 
-    // ── TABLE ────────────────────────────────────────────────
-    // Build head row
-    const headRow1 = ["S/N", "Student Name", "Reg No."];
-    subjects.forEach(s => headRow1.push(s, "", "", "", ""));
-    headRow1.push("Grand Total", "Average", "Position");
+    // ── TABLE HEADER ROW 1 — subject group labels ────────────
+    const hRow1 = ["S/N", "Student Name", "Reg No."];
+    subjects.forEach(s => { hRow1.push(s); for(let i=0;i<4;i++) hRow1.push(""); });
+    hRow1.push("Grand Total", "Average", "Position");
+    wsData.push(hRow1);
 
-    const headRow2 = ["", "", ""];
-    subjects.forEach(() => headRow2.push("T1", "T2", "Exam", "Total", "Pos"));
-    headRow2.push("", "", "");
+    // ── TABLE HEADER ROW 2 — sub-columns ────────────────────
+    const hRow2 = ["", "", ""];
+    subjects.forEach(() => hRow2.push("T1", "T2", "Exam", "Total", "Pos"));
+    hRow2.push("", "", "");
+    wsData.push(hRow2);
 
-    // Build body rows
-    const body = rows.map((r, idx) => {
-      const cells = [idx + 1, r.fullName || "—", r.regNumber];
+    // ── BODY ROWS ────────────────────────────────────────────
+    rows.forEach((r, idx) => {
+      const row = [idx + 1, r.fullName || "—", r.regNumber];
       subjects.forEach(sub => {
         if (!r.offered.includes(sub)) {
-          cells.push("N/A", "", "", "", "");
+          row.push("N/A", "", "", "", "");
         } else {
           const sc  = scoreMap[r.regNumber]?.[sub];
           const t1  = sc?.test1 || 0, t2 = sc?.test2 || 0, ex = sc?.exam || 0;
-          cells.push(t1 || "—", t2 || "—", ex || "—", t1+t2+ex || "—", "");
+          row.push(t1||0, t2||0, ex||0, t1+t2+ex, "");
         }
       });
-      const avg = r.offered.length > 0 ? (r.grand / r.offered.length).toFixed(1) : "0";
-      cells.push(r.grand, avg, posMap[r.regNumber] || "—");
-      return cells;
+      const avg = r.offered.length > 0 ? parseFloat((r.grand / r.offered.length).toFixed(1)) : 0;
+      row.push(r.grand, avg, posMap[r.regNumber] || "—");
+      wsData.push(row);
     });
 
-    doc.autoTable({
-      head: [headRow1, headRow2],
-      body,
-      startY: y,
-      margin: { left: 10, right: 10, bottom: 20 },
-      styles: { fontSize: 6.5, cellPadding: 1.5, halign: "center", valign: "middle" },
-      headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: "bold", fontSize: 6.5 },
-      columnStyles: {
-        0: { cellWidth: 8 },
-        1: { cellWidth: 32, halign: "left" },
-        2: { cellWidth: 22 },
-      },
-      alternateRowStyles: { fillColor: [241, 245, 249] },
-      didParseCell(data) {
-        // Merge subject name across 5 columns in first header row
-        if (data.row.index === 0 && data.column.index > 2) {
-          const subIdx = (data.column.index - 3) % 5;
-          if (subIdx === 0) data.cell.colSpan = 5;
-          else data.cell.text = [];
-        }
-      }
+    // ── FOOTER ROWS ──────────────────────────────────────────
+    wsData.push([]); // blank spacer
+    wsData.push([`Signature: ___________________________`]);
+    wsData.push([`Developed by Brightest Digital Services`]);
+    wsData.push([`Date Generated: ${new Date().toLocaleDateString("en-GB", { day:"2-digit", month:"long", year:"numeric" })}`]);
+
+    // ── CREATE WORKBOOK ──────────────────────────────────────
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // ── COLUMN WIDTHS ────────────────────────────────────────
+    const colWidths = [{ wch: 5 }, { wch: 28 }, { wch: 14 }];
+    subjects.forEach(() => { colWidths.push({wch:5},{wch:5},{wch:6},{wch:7},{wch:5}); });
+    colWidths.push({ wch: 11 }, { wch: 9 }, { wch: 9 });
+    ws["!cols"] = colWidths;
+
+    // ── MERGES — header title rows span all columns ──────────
+    const merges = [
+      { s:{r:0,c:0}, e:{r:0,c:totalCols-1} }, // school name
+      { s:{r:1,c:0}, e:{r:1,c:totalCols-1} }, // RESULT BROADSHEET
+      { s:{r:2,c:0}, e:{r:2,c:totalCols-1} }, // session/term/class
+      { s:{r:3,c:0}, e:{r:3,c:totalCols-1} }, // form teacher
+    ];
+    // Merge subject name across 5 sub-columns in header row 1 (row index 5)
+    subjects.forEach((_, i) => {
+      const c = 3 + i * 5;
+      merges.push({ s:{r:5,c}, e:{r:5,c:c+4} });
     });
+    // Merge Grand Total, Average, Position header across both header rows
+    [totalCols-3, totalCols-2, totalCols-1].forEach(c => {
+      merges.push({ s:{r:5,c}, e:{r:6,c} });
+    });
+    // Merge S/N, Name, Reg across both header rows
+    [0,1,2].forEach(c => { merges.push({ s:{r:5,c}, e:{r:6,c} }); });
+    // Footer merges
+    const footerStart = 5 + 2 + rows.length + 1;
+    [0,1,2].forEach(offset => {
+      merges.push({ s:{r:footerStart+offset,c:0}, e:{r:footerStart+offset,c:totalCols-1} });
+    });
+    ws["!merges"] = merges;
 
-    // ── FOOTER ───────────────────────────────────────────────
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      const fy = ph - 10;
-      doc.setFontSize(7); doc.setFont("helvetica", "normal");
-      doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3);
-      doc.line(10, fy - 6, pw - 10, fy - 6);
-      doc.text(`Date Generated: ${new Date().toLocaleDateString("en-GB", { day:"2-digit", month:"long", year:"numeric" })}`, 10, fy - 2);
-      doc.text(`Signature: ___________________________`, pw / 2 - 20, fy - 2);
-      doc.text(`Developed by Brightest Digital Services`, pw - 10, fy - 2, { align: "right" });
-      doc.text(`Page ${i} of ${pageCount}`, pw - 10, fy + 3, { align: "right" });
-    }
+    XLSX.utils.book_append_sheet(wb, ws, classArm);
+    XLSX.writeFile(wb, `Broadsheet_${classArm}_${TERM_LABELS[term]}_${sessionData.session || "2024"}.xlsx`);
+    toast("Excel file downloaded successfully.", "success");
 
-    // ── SAVE ─────────────────────────────────────────────────
-    doc.save(`Broadsheet_${classArm}_${TERM_LABELS[term]}_${sessionData.session || "2024"}.pdf`);
-    toast("PDF downloaded successfully.", "success");
-
-  } catch(e) { console.error(e); toast("PDF error: " + e.message, "error"); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf-fill"></i> Download PDF'; }
+  } catch(e) { console.error(e); toast("Excel error: " + e.message, "error"); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-excel-fill"></i> Download Excel'; }
 });
 
 // ══════════════════════════════════════════════════════════════
