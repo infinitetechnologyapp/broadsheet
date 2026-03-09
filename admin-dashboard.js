@@ -320,20 +320,27 @@ async function loadTeachers() {
   renderTeacherRows();
 }
 
+// School identity state
+let _schoolName = "Recomella Academy";
+let _schoolLogo = "./logo.png"; // loaded directly from project folder
+
 async function loadSession() {
   try {
     const s = await getSession();
     const t = s.currentTerm || "1";
     $("statSession").textContent = s.session || "—";
     $("statTerm").textContent    = TERM_LABELS[t] || "—";
-
-    // Set current term on ALL term dropdowns across the dashboard
     ["scoreTerm","subjectTerm","bsTerm","remarkTerm","approvalTerm","resetTerm"].forEach(id => {
       const el = $(id); if (el) el.value = t;
     });
     if (_isMaster) {
-      $("sessionInput").value = s.session || "";
-      $("termInput").value    = t;
+      $("sessionInput").value    = s.session || "";
+      $("termInput").value       = t;
+      $("schoolNameInput").value = s.schoolName || "";
+    }
+    if (s.schoolName) {
+      _schoolName = s.schoolName;
+      const bn = $("brandName"); if (bn) bn.textContent = s.schoolName;
     }
   } catch(e) { console.error(e); }
 }
@@ -796,8 +803,8 @@ $("loadBroadsheetBtn").addEventListener("click", async () => {
     if (!students.length) { toast("No students found in this class arm.", "warning"); return; }
     if (!subjects.length) { toast("No subjects set up for this class/term yet.", "warning"); return; }
     renderBroadsheet(classArm, term, students, allScores, subjects);
-    $("broadsheetCard").style.display = "block";
-    $("printBroadsheetBtn").style.display = "inline-flex";
+    $("broadsheetCard").style.display  = "block";
+    $("downloadPdfBtn").style.display  = "inline-flex";
   } catch(e) { toast(e.message, "error"); console.error(e); }
   finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load'; }
 });
@@ -911,7 +918,155 @@ function renderBroadsheet(classArm, term, students, allScores, subjects) {
   $("broadsheetTbody").innerHTML = tbody;
 }
 
-$("printBroadsheetBtn").addEventListener("click", () => window.print());
+$("downloadPdfBtn").addEventListener("click", async () => {
+  const classArm  = $("bsClassArm").value;
+  const term      = $("bsTerm").value;
+  const classBase = armToBase(classArm);
+  if (!classArm || !term) { toast("Load broadsheet first.", "error"); return; }
+
+  const btn = $("downloadPdfBtn");
+  btn.disabled = true; btn.textContent = "Generating…";
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pw  = doc.internal.pageSize.getWidth();
+    const ph  = doc.internal.pageSize.getHeight();
+
+    // ── Fetch live data ──────────────────────────────────────
+    const [students, allScores, subjects, sessionData] = await Promise.all([
+      getStudentsByClassArm(classArm),
+      getScoresByClassArmTerm(classArm, term),
+      getClassSubjects(classBase, term),
+      getSession()
+    ]);
+
+    // Find form teacher email for this class
+    const ftEmail = Object.entries(FORM_TEACHERS).find(([, cls]) => cls === classBase)?.[0] || "—";
+
+    // Build score lookup
+    const scoreMap = {};
+    allScores.forEach(sc => {
+      if (!scoreMap[sc.regNumber]) scoreMap[sc.regNumber] = {};
+      scoreMap[sc.regNumber][sc.subject] = sc;
+    });
+
+    // Enrich rows
+    const rows = students.map(s => {
+      const offAll  = !s.subjectsOffered || s.subjectsOffered === "all";
+      const offered = subjects.filter(sub => offAll || (Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(sub)));
+      let grand = 0;
+      offered.forEach(sub => {
+        const sc = scoreMap[s.regNumber]?.[sub];
+        if (sc) grand += (sc.test1||0) + (sc.test2||0) + (sc.exam||0);
+      });
+      return { ...s, offered, grand };
+    }).sort((a, b) => (a.fullName||"").localeCompare(b.fullName||""));
+
+    const posMap = {};
+    [...rows].sort((a,b) => b.grand - a.grand).forEach((r, i) => { posMap[r.regNumber] = ordinal(i+1); });
+
+    // ── HEADER ───────────────────────────────────────────────
+    let y = 14;
+
+    // Load logo.png from project folder
+    try {
+      const logoResp = await fetch("./logo.png");
+      if (logoResp.ok) {
+        const blob   = await logoResp.blob();
+        const reader = new FileReader();
+        const b64    = await new Promise(res => { reader.onload = e => res(e.target.result); reader.readAsDataURL(blob); });
+        doc.addImage(b64, "PNG", 10, 5, 20, 20);
+      }
+    } catch(e) { /* logo not found — skip */ }
+
+    doc.setFontSize(16); doc.setFont("helvetica", "bold");
+    doc.text((_schoolName || "BrightSchool").toUpperCase(), pw / 2, y, { align: "center" });
+    y += 6;
+    doc.setFontSize(9); doc.setFont("helvetica", "bold");
+    doc.text("RESULT BROADSHEET", pw / 2, y, { align: "center" });
+    y += 6;
+    doc.setFontSize(9); doc.setFont("helvetica", "normal");
+    doc.text(`Session: ${sessionData.session || "—"}   |   Term: ${TERM_LABELS[term]}   |   Class: ${classArm}`, pw / 2, y, { align: "center" });
+    y += 5;
+    doc.text(`Form Teacher: ${ftEmail}`, pw / 2, y, { align: "center" });
+    y += 4;
+    doc.setDrawColor(79, 70, 229);
+    doc.setLineWidth(0.5);
+    doc.line(10, y, pw - 10, y);
+    y += 4;
+
+    // ── TABLE ────────────────────────────────────────────────
+    // Build head row
+    const headRow1 = ["S/N", "Student Name", "Reg No."];
+    subjects.forEach(s => headRow1.push(s, "", "", "", ""));
+    headRow1.push("Grand Total", "Average", "Position");
+
+    const headRow2 = ["", "", ""];
+    subjects.forEach(() => headRow2.push("T1", "T2", "Exam", "Total", "Pos"));
+    headRow2.push("", "", "");
+
+    // Build body rows
+    const body = rows.map((r, idx) => {
+      const cells = [idx + 1, r.fullName || "—", r.regNumber];
+      subjects.forEach(sub => {
+        if (!r.offered.includes(sub)) {
+          cells.push("N/A", "", "", "", "");
+        } else {
+          const sc  = scoreMap[r.regNumber]?.[sub];
+          const t1  = sc?.test1 || 0, t2 = sc?.test2 || 0, ex = sc?.exam || 0;
+          cells.push(t1 || "—", t2 || "—", ex || "—", t1+t2+ex || "—", "");
+        }
+      });
+      const avg = r.offered.length > 0 ? (r.grand / r.offered.length).toFixed(1) : "0";
+      cells.push(r.grand, avg, posMap[r.regNumber] || "—");
+      return cells;
+    });
+
+    doc.autoTable({
+      head: [headRow1, headRow2],
+      body,
+      startY: y,
+      margin: { left: 10, right: 10, bottom: 20 },
+      styles: { fontSize: 6.5, cellPadding: 1.5, halign: "center", valign: "middle" },
+      headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: "bold", fontSize: 6.5 },
+      columnStyles: {
+        0: { cellWidth: 8 },
+        1: { cellWidth: 32, halign: "left" },
+        2: { cellWidth: 22 },
+      },
+      alternateRowStyles: { fillColor: [241, 245, 249] },
+      didParseCell(data) {
+        // Merge subject name across 5 columns in first header row
+        if (data.row.index === 0 && data.column.index > 2) {
+          const subIdx = (data.column.index - 3) % 5;
+          if (subIdx === 0) data.cell.colSpan = 5;
+          else data.cell.text = [];
+        }
+      }
+    });
+
+    // ── FOOTER ───────────────────────────────────────────────
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      const fy = ph - 10;
+      doc.setFontSize(7); doc.setFont("helvetica", "normal");
+      doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3);
+      doc.line(10, fy - 6, pw - 10, fy - 6);
+      doc.text(`Date Generated: ${new Date().toLocaleDateString("en-GB", { day:"2-digit", month:"long", year:"numeric" })}`, 10, fy - 2);
+      doc.text(`Signature: ___________________________`, pw / 2 - 20, fy - 2);
+      doc.text(`Developed by Brightest Digital Services`, pw - 10, fy - 2, { align: "right" });
+      doc.text(`Page ${i} of ${pageCount}`, pw - 10, fy + 3, { align: "right" });
+    }
+
+    // ── SAVE ─────────────────────────────────────────────────
+    doc.save(`Broadsheet_${classArm}_${TERM_LABELS[term]}_${sessionData.session || "2024"}.pdf`);
+    toast("PDF downloaded successfully.", "success");
+
+  } catch(e) { console.error(e); toast("PDF error: " + e.message, "error"); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf-fill"></i> Download PDF'; }
+});
 
 // ══════════════════════════════════════════════════════════════
 //  REMARKS
@@ -1153,13 +1308,27 @@ $("saveSTBtn")?.addEventListener("click", async () => {
 // ══════════════════════════════════════════════════════════════
 //  SETTINGS  — Master Admin only
 // ══════════════════════════════════════════════════════════════
+$("saveSchoolBtn")?.addEventListener("click", async () => {
+  const name = $("schoolNameInput").value.trim();
+  if (!name) { toast("Enter school name.", "error"); return; }
+  const btn = $("saveSchoolBtn"); btn.disabled = true; btn.textContent = "Saving…";
+  try {
+    const s = await getSession();
+    await saveSession(s.session || "", s.currentTerm || "1", name, "");
+    _schoolName = name;
+    const bn = $("brandName"); if (bn) bn.textContent = name;
+    toast("School name saved.", "success");
+  } catch(e) { toast(e.message, "error"); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save"></i> Save School Name'; }
+});
+
 $("saveSessionBtn")?.addEventListener("click", async () => {
   const session = $("sessionInput").value.trim();
   const term    = $("termInput").value;
   if (!session) { toast("Enter a session.", "error"); return; }
   const btn = $("saveSessionBtn"); btn.disabled = true; btn.textContent = "Saving…";
   try {
-    await saveSession(session, term);
+    await saveSession(session, term, _schoolName, _schoolLogo);
     toast("Session saved.", "success");
     $("statSession").textContent = session;
     $("statTerm").textContent    = TERM_LABELS[term];
