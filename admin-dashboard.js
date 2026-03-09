@@ -23,7 +23,12 @@ import {
 //  → Dashboard will show them BOTH sections simultaneously
 // ══════════════════════════════════════════════════════════════
 
-const MASTER_ADMIN = "infinitetechnology04@gmail.com".toLowerCase();
+// Add as many master admin emails as needed
+const MASTER_ADMINS = [
+  "infinitetechnology04@gmail.com".toLowerCase(),
+  "macpeppleibim@gmail.com".toLowerCase(),
+  // "secondadmin@gmail.com".toLowerCase(),
+];
 
 // Teacher roles — loaded from Firestore at runtime by master admin
 // These start empty and get populated by loadTeachers() on init
@@ -54,7 +59,7 @@ function resolveRole(email) {
   console.log("ST keys:", JSON.stringify(stKeys));
   console.log("ST email match:", stKeys.map(k => `'${k}'==='${e}'? ${k===e}`));
 
-  if (e === MASTER_ADMIN) { _isMaster = true; console.log("Role: MASTER"); return; }
+  if (MASTER_ADMINS.includes(e)) { _isMaster = true; console.log("Role: MASTER"); return; }
   if (FORM_TEACHERS[e])   { _isFT = true; _ftClass = FORM_TEACHERS[e]; console.log("Role: FT →", _ftClass); }
   if (SUBJECT_TEACHERS[e]) {
     _isST       = true;
