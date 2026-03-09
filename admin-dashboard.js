@@ -924,6 +924,12 @@ $("downloadExcelBtn").addEventListener("click", async () => {
   const classBase = armToBase(classArm);
   if (!classArm || !term) { toast("Load broadsheet first.", "error"); return; }
 
+  // Safety check — make sure SheetJS loaded
+  if (typeof XLSX === "undefined") {
+    toast("Excel library not loaded. Check your internet connection and refresh.", "error");
+    return;
+  }
+
   const btn = $("downloadExcelBtn");
   btn.disabled = true; btn.textContent = "Generating…";
 
