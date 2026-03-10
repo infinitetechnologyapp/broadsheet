@@ -26,6 +26,7 @@ import {
 // Add as many master admin emails as needed
 const MASTER_ADMINS = [
   "infinitetechnology04@gmail.com".toLowerCase(),
+  "macpeppleibim@gmail.com".toLowerCase(),
   // "secondadmin@gmail.com".toLowerCase(),
 ];
 
