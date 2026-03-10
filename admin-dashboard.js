@@ -26,7 +26,6 @@ import {
 // Add as many master admin emails as needed
 const MASTER_ADMINS = [
   "infinitetechnology04@gmail.com".toLowerCase(),
-  "macpeppleibim@gmail.com".toLowerCase(),
   // "secondadmin@gmail.com".toLowerCase(),
 ];
 
@@ -918,140 +917,163 @@ function renderBroadsheet(classArm, term, students, allScores, subjects) {
   $("broadsheetTbody").innerHTML = tbody;
 }
 
-$("downloadExcelBtn").addEventListener("click", async () => {
-  const classArm  = $("bsClassArm").value;
-  const term      = $("bsTerm").value;
-  const classBase = armToBase(classArm);
+$("downloadExcelBtn").addEventListener("click", async function() {
+  var classArm  = $("bsClassArm").value;
+  var term      = $("bsTerm").value;
+  var classBase = armToBase(classArm);
   if (!classArm || !term) { toast("Load broadsheet first.", "error"); return; }
 
-  // Safety check — make sure SheetJS loaded
   if (typeof XLSX === "undefined") {
-    toast("Excel library not loaded. Check your internet connection and refresh.", "error");
+    toast("Excel library not loaded. Refresh and try again.", "error");
     return;
   }
 
-  const btn = $("downloadExcelBtn");
-  btn.disabled = true; btn.textContent = "Generating…";
+  var btn = $("downloadExcelBtn");
+  btn.disabled = true; btn.textContent = "Generating...";
 
   try {
-    // ── Fetch live data ──────────────────────────────────────
-    const [students, allScores, subjects, sessionData] = await Promise.all([
+    // Fetch same data as broadsheet load
+    var results    = await Promise.all([
       getStudentsByClassArm(classArm),
       getScoresByClassArmTerm(classArm, term),
       getClassSubjects(classBase, term),
       getSession()
     ]);
+    var students   = results[0];
+    var allScores  = results[1];
+    var subjects   = results[2];
+    var sessionData = results[3];
 
-    const ftEmail = Object.entries(FORM_TEACHERS).find(([, cls]) => cls === classBase)?.[0] || "—";
+    if (!students.length)  { toast("No students found.", "error"); return; }
+    if (!subjects.length)  { toast("No subjects found.", "error"); return; }
 
-    // Build score lookup
-    const scoreMap = {};
-    allScores.forEach(sc => {
+    var ftPair  = Object.entries(FORM_TEACHERS).find(function(p) { return p[1] === classBase; });
+    var ftEmail = ftPair ? ftPair[0] : "-";
+
+    // Score lookup
+    var scoreMap = {};
+    allScores.forEach(function(sc) {
       if (!scoreMap[sc.regNumber]) scoreMap[sc.regNumber] = {};
       scoreMap[sc.regNumber][sc.subject] = sc;
     });
 
-    // Enrich rows
-    const rows = students.map(s => {
-      const offAll  = !s.subjectsOffered || s.subjectsOffered === "all";
-      const offered = subjects.filter(sub => offAll || (Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(sub)));
-      let grand = 0;
-      offered.forEach(sub => {
-        const sc = scoreMap[s.regNumber]?.[sub];
+    // Enrich students
+    var rows = students.map(function(s) {
+      var offAll  = !s.subjectsOffered || s.subjectsOffered === "all";
+      var offered = subjects.filter(function(sub) {
+        return offAll || (Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(sub));
+      });
+      var grand = 0;
+      offered.forEach(function(sub) {
+        var sc = scoreMap[s.regNumber] && scoreMap[s.regNumber][sub];
         if (sc) grand += (sc.test1||0) + (sc.test2||0) + (sc.exam||0);
       });
-      return { ...s, offered, grand };
-    }).sort((a, b) => (a.fullName||"").localeCompare(b.fullName||""));
+      return Object.assign({}, s, { offered: offered, grand: grand });
+    }).sort(function(a, b) { return (a.fullName||"").localeCompare(b.fullName||""); });
 
-    const posMap = {};
-    [...rows].sort((a,b) => b.grand - a.grand).forEach((r, i) => { posMap[r.regNumber] = ordinal(i+1); });
+    // Position map
+    var posMap = {};
+    rows.slice().sort(function(a,b) { return b.grand - a.grand; }).forEach(function(r, i) {
+      posMap[r.regNumber] = ordinal(i + 1);
+    });
 
-    // Total columns count for merges
-    const totalCols = 3 + (subjects.length * 5) + 3; // S/N + Name + Reg + subjects*5 + Grand+Avg+Pos
+    // Subject stats
+    var subjAvg = {}, subjHigh = {}, subjLow = {};
+    subjects.forEach(function(sub) {
+      var tots = rows.filter(function(r) { return r.offered.includes(sub); }).map(function(r) {
+        var sc = scoreMap[r.regNumber] && scoreMap[r.regNumber][sub];
+        return sc ? (sc.test1||0)+(sc.test2||0)+(sc.exam||0) : 0;
+      });
+      subjAvg[sub]  = tots.length ? (tots.reduce(function(a,b){return a+b;},0)/tots.length).toFixed(1) : "-";
+      subjHigh[sub] = tots.length ? Math.max.apply(null, tots) : "-";
+      subjLow[sub]  = tots.length ? Math.min.apply(null, tots) : "-";
+    });
 
-    // ── BUILD WORKSHEET DATA ─────────────────────────────────
-    const wsData = [];
+    // ── BUILD WORKSHEET ──────────────────────────────────────
+    var wsData = [];
 
-    // ── HEADER ROWS ──────────────────────────────────────────
+    // HEADER
     wsData.push([(_schoolName || "BrightSchool").toUpperCase()]);
     wsData.push(["RESULT BROADSHEET"]);
-    wsData.push([`Session: ${sessionData.session || "—"}   |   Term: ${TERM_LABELS[term]}   |   Class: ${classArm}`]);
-    wsData.push([`Form Teacher: ${ftEmail}`]);
-    wsData.push([]); // blank spacer
+    wsData.push(["Session: " + (sessionData.session||"-") + "  |  Term: " + TERM_LABELS[term] + "  |  Class: " + classArm]);
+    wsData.push(["Form Teacher: " + ftEmail]);
+    wsData.push([""]);
 
-    // ── TABLE HEADER ROW 1 — subject group labels ────────────
-    const hRow1 = ["S/N", "Student Name", "Reg No."];
-    subjects.forEach(s => { hRow1.push(s); for(let i=0;i<4;i++) hRow1.push(""); });
-    hRow1.push("Grand Total", "Average", "Position");
-    wsData.push(hRow1);
+    // TABLE HEADER ROW 1 — subject group labels
+    var h1 = ["S/N", "Student Name", "Reg No."];
+    subjects.forEach(function(s) { h1.push(s, "", "", "", ""); });
+    h1.push("Grand Total", "Average", "Position");
+    wsData.push(h1);
 
-    // ── TABLE HEADER ROW 2 — sub-columns ────────────────────
-    const hRow2 = ["", "", ""];
-    subjects.forEach(() => hRow2.push("T1", "T2", "Exam", "Total", "Pos"));
-    hRow2.push("", "", "");
-    wsData.push(hRow2);
+    // TABLE HEADER ROW 2 — sub-columns
+    var h2 = ["", "", ""];
+    subjects.forEach(function() { h2.push("T1", "T2", "Exam", "Total", "Pos"); });
+    h2.push("", "", "");
+    wsData.push(h2);
 
-    // ── BODY ROWS ────────────────────────────────────────────
-    rows.forEach((r, idx) => {
-      const row = [idx + 1, r.fullName || "—", r.regNumber];
-      subjects.forEach(sub => {
+    // STUDENT ROWS
+    rows.forEach(function(r, idx) {
+      var row = [idx + 1, r.fullName || "-", r.regNumber];
+      subjects.forEach(function(sub) {
         if (!r.offered.includes(sub)) {
           row.push("N/A", "", "", "", "");
         } else {
-          const sc  = scoreMap[r.regNumber]?.[sub];
-          const t1  = sc?.test1 || 0, t2 = sc?.test2 || 0, ex = sc?.exam || 0;
-          row.push(t1||0, t2||0, ex||0, t1+t2+ex, "");
+          var sc = scoreMap[r.regNumber] && scoreMap[r.regNumber][sub];
+          var t1 = sc ? (sc.test1||0) : 0;
+          var t2 = sc ? (sc.test2||0) : 0;
+          var ex = sc ? (sc.exam||0)  : 0;
+          row.push(t1, t2, ex, t1+t2+ex, "");
         }
       });
-      const avg = r.offered.length > 0 ? parseFloat((r.grand / r.offered.length).toFixed(1)) : 0;
-      row.push(r.grand, avg, posMap[r.regNumber] || "—");
+      var avg = r.offered.length > 0 ? parseFloat((r.grand / r.offered.length).toFixed(1)) : 0;
+      row.push(r.grand, avg, posMap[r.regNumber] || "-");
       wsData.push(row);
     });
 
-    // ── FOOTER ROWS ──────────────────────────────────────────
-    wsData.push([]); // blank spacer
-    wsData.push([`Signature: ___________________________`]);
-    wsData.push([`Developed by Brightest Digital Services`]);
-    wsData.push([`Date Generated: ${new Date().toLocaleDateString("en-GB", { day:"2-digit", month:"long", year:"numeric" })}`]);
-
-    // ── CREATE WORKBOOK ──────────────────────────────────────
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    // ── COLUMN WIDTHS ────────────────────────────────────────
-    const colWidths = [{ wch: 5 }, { wch: 28 }, { wch: 14 }];
-    subjects.forEach(() => { colWidths.push({wch:5},{wch:5},{wch:6},{wch:7},{wch:5}); });
-    colWidths.push({ wch: 11 }, { wch: 9 }, { wch: 9 });
-    ws["!cols"] = colWidths;
-
-    // ── MERGES — header title rows span all columns ──────────
-    const merges = [
-      { s:{r:0,c:0}, e:{r:0,c:totalCols-1} }, // school name
-      { s:{r:1,c:0}, e:{r:1,c:totalCols-1} }, // RESULT BROADSHEET
-      { s:{r:2,c:0}, e:{r:2,c:totalCols-1} }, // session/term/class
-      { s:{r:3,c:0}, e:{r:3,c:totalCols-1} }, // form teacher
-    ];
-    // Merge subject name across 5 sub-columns in header row 1 (row index 5)
-    subjects.forEach((_, i) => {
-      const c = 3 + i * 5;
-      merges.push({ s:{r:5,c}, e:{r:5,c:c+4} });
+    // SUMMARY ROWS
+    var avgRow  = ["", "CLASS AVERAGE",  ""];
+    var highRow = ["", "HIGHEST SCORE",  ""];
+    var lowRow  = ["", "LOWEST SCORE",   ""];
+    subjects.forEach(function(sub) {
+      avgRow.push( "",  "",  "", subjAvg[sub],  "");
+      highRow.push("",  "",  "", subjHigh[sub], "");
+      lowRow.push( "",  "",  "", subjLow[sub],  "");
     });
-    // Merge Grand Total, Average, Position header across both header rows
-    [totalCols-3, totalCols-2, totalCols-1].forEach(c => {
-      merges.push({ s:{r:5,c}, e:{r:6,c} });
-    });
-    // Merge S/N, Name, Reg across both header rows
-    [0,1,2].forEach(c => { merges.push({ s:{r:5,c}, e:{r:6,c} }); });
-    // Footer merges
-    const footerStart = 5 + 2 + rows.length + 1;
-    [0,1,2].forEach(offset => {
-      merges.push({ s:{r:footerStart+offset,c:0}, e:{r:footerStart+offset,c:totalCols-1} });
-    });
-    ws["!merges"] = merges;
+    avgRow.push("", "", "");  highRow.push("", "", "");  lowRow.push("", "", "");
+    wsData.push(avgRow); wsData.push(highRow); wsData.push(lowRow);
 
-    XLSX.utils.book_append_sheet(wb, ws, classArm);
-    XLSX.writeFile(wb, `Broadsheet_${classArm}_${TERM_LABELS[term]}_${sessionData.session || "2024"}.xlsx`);
-    toast("Excel file downloaded successfully.", "success");
+    // FOOTER
+    wsData.push([""]);
+    wsData.push(["Signature: ___________________________"]);
+    wsData.push(["Developed by Brightest Digital Services"]);
+    wsData.push(["Date Generated: " + new Date().toLocaleDateString("en-GB", {day:"2-digit",month:"long",year:"numeric"})]);
+
+    // BUILD WORKBOOK
+    var wb = XLSX.utils.book_new();
+    var ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Column widths
+    var cw = [{wch:5},{wch:30},{wch:15}];
+    subjects.forEach(function() { cw.push({wch:5},{wch:5},{wch:6},{wch:7},{wch:5}); });
+    cw.push({wch:12},{wch:9},{wch:9});
+    ws["!cols"] = cw;
+
+    var sheetName = classArm.replace(/[\/\\*?\[\]]/g,"").substring(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+    // DOWNLOAD
+    var wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    var blob  = new Blob([wbout], { type: "application/octet-stream" });
+    var url   = URL.createObjectURL(blob);
+    var a     = document.createElement("a");
+    var fname = "Broadsheet_" + classArm + "_" + TERM_LABELS[term] + "_" + (sessionData.session||"2024") + ".xlsx";
+    a.href    = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+
+    toast("Excel downloaded successfully.", "success");
 
   } catch(e) { console.error(e); toast("Excel error: " + e.message, "error"); }
   finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-excel-fill"></i> Download Excel'; }
