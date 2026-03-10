@@ -671,9 +671,11 @@ $("loadScoresBtn").addEventListener("click", async () => {
     // FIX #8: Always fresh fetch — this gives us fullName + all fields
     const all = await getStudentsByClassArm(classArm);
 
-    // Load ALL students in the class arm — subject teacher enters scores for all students
-    // subjectsOffered is only used on the broadsheet output, not for score entry
-    _scoreStudents = all.sort((a, b) => (a.fullName||"").localeCompare(b.fullName||""));
+    // Filter to only students offering this subject
+    _scoreStudents = all.filter(function(s) {
+      var offAll = !s.subjectsOffered || s.subjectsOffered === "all";
+      return offAll || (Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(subject));
+    }).sort((a, b) => (a.fullName||"").localeCompare(b.fullName||""));
 
     // Load existing saved scores
     const saved = await getScoresByClassArmSubjectTerm(classArm, subject, term);
