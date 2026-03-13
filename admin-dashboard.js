@@ -675,7 +675,7 @@ $("loadScoresBtn").addEventListener("click", async () => {
     _scoreStudents = all.filter(function(s) {
       var offAll = !s.subjectsOffered || s.subjectsOffered === "all";
       return offAll || (Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(subject));
-    }).sort((a, b) => (a.fullName||"").localeCompare(b.fullName||""));
+    }).sort((a, b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
 
     // Load existing saved scores
     const saved = await getScoresByClassArmSubjectTerm(classArm, subject, term);
@@ -872,7 +872,7 @@ function renderBroadsheet(classArm, term, students, allScores, subjects) {
 
   // Build tbody
   let tbody = "";
-  [...rows].sort((a,b) => (a.fullName||"").localeCompare(b.fullName||"")).forEach((r, idx) => {
+  [...rows].sort((a,b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true})).forEach((r, idx) => {
     let cols = "";
     subjects.forEach(sub => {
       if (!r.offered.includes(sub)) {
@@ -972,7 +972,7 @@ $("downloadExcelBtn").addEventListener("click", async function() {
         if (sc) grand += (sc.test1||0) + (sc.test2||0) + (sc.exam||0);
       });
       return Object.assign({}, s, { offered: offered, grand: grand });
-    }).sort(function(a, b) { return (a.fullName||"").localeCompare(b.fullName||""); });
+    }).sort(function(a, b) { return (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}); });
 
     // Position map
     var posMap = {};
@@ -1098,7 +1098,7 @@ $("loadRemarksBtn").addEventListener("click", async () => {
   const btn = $("loadRemarksBtn"); btn.disabled = true; btn.textContent = "Loading…";
   try {
     _remStudents = (await getStudentsByClassArm(classArm))
-      .sort((a,b) => (a.fullName||"").localeCompare(b.fullName||""));
+      .sort((a,b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
     const existing = await getRemarksByClassArmTerm(classArm, term);
     const remMap   = {};
     existing.forEach(r => { remMap[r.regNumber] = r.remark; });
