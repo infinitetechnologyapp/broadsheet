@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Recomella Broadsheet</title>
-  <link rel="icon" href="logo.png" type="image/broadsheet-icon" />
+  <title> Dashboard</title>
+  <link rel="icon" href="schoolNova.png" type="image/broadsheet-icon" />
   <link rel="stylesheet" href="./style.css"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -12,9 +12,9 @@
 <body>
 
 <!-- Auth loading overlay — hidden once Firebase confirms session -->
-<div id="authLoadingOverlay" style="position:fixed;inset:0;background:#f1f5f9;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px">
-  <div style="width:52px;height:52px;border-radius:14px;background:#ffffff;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;color:#fff"><img src="schlogo.png" alt="RA" /></div>
-  <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;color:#1e293b">Recomella Academy</div>
+<div id="authLoadingOverlay" style="position:fixed;inset:0;background:#ffffff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px">
+  <div style="width:52px;height:52px;border-radius:14px;background:#ffffff;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;color:#fff"><img src="schoolNova2.png" alt="SN" /></div>
+  <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;color:#1e293b">SchoolNova</div>
   <div style="width:36px;height:36px;border:4px solid #e0e7ff;border-top-color:#4f46e5;border-radius:50%;animation:spin .8s linear infinite"></div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 </div>
@@ -27,11 +27,11 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon" id="brandIcon">
-        <img src="./logo.png" onerror="this.style.display='none';this.parentElement.textContent='B'" style="width:100%;height:100%;object-fit:contain;border-radius:8px"/>
+        <img src="schoolNova2.png" onerror="this.style.display='none';this.parentElement.textContent='B'" style="width:100%;height:100%;object-fit:contain;border-radius:8px"/>
       </div>
       <div class="brand-text">
-        <div id="brandName">BrightSchool</div>
-        <div class="brand-sub">Result Broadsheet</div>
+        <div id="brandName">SchoolNova</div>
+        <div class="brand-sub">Keeping School Records</div>
       </div>
     </div>
     <nav class="sidebar-nav" id="sidebarNav">
@@ -41,13 +41,16 @@
       <div class="nav-item" data-section="section-scores"     id="nav-scores"><i class="bi bi-pencil-square"></i><span>Enter Scores</span></div>
       <div class="nav-item" data-section="section-broadsheet" id="nav-broadsheet"><i class="bi bi-table"></i><span>Broadsheet</span></div>
       <div class="nav-item" data-section="section-remarks"    id="nav-remarks"><i class="bi bi-chat-left-quote-fill"></i><span>Remarks</span></div>
+      <div class="nav-item" data-section="section-results"    id="nav-results"><i class="bi bi-card-list"></i><span>Results</span></div>
+      <div class="nav-item" data-section="section-attendance" id="nav-attendance"><i class="bi bi-calendar-check-fill"></i><span>Attendance</span></div>
+      <div class="nav-item" data-section="section-exam"       id="nav-exam"><i class="bi bi-journal-text"></i><span>Exam</span></div>
       <div class="nav-item" data-section="section-approval"   id="nav-approval"><i class="bi bi-patch-check-fill"></i><span>Approvals</span></div>
+      <div class="nav-item" data-section="section-recordbank" id="nav-recordbank"><i class="bi bi-archive-fill"></i><span>Record Bank</span></div>
+      <div class="nav-item" data-section="section-promotion"  id="nav-promotion"><i class="bi bi-arrow-up-circle-fill"></i><span>Promotion</span></div>
+      <div class="nav-item" data-section="section-alumni"     id="nav-alumni"><i class="bi bi-mortarboard-fill"></i><span>Alumni</span></div>
       <div class="nav-item" data-section="section-settings"   id="nav-settings"><i class="bi bi-gear-fill"></i><span>Settings</span></div>
     </nav>
     <div class="sidebar-footer">
-      <button id="openResetBtn" style="display:none;align-items:center;gap:8px;background:rgba(245,158,11,.1);color:#f59e0b;border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:9px 12px;font-family:'Nunito',sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;width:100%;margin-bottom:8px;transition:all .25s">
-        <i class="bi bi-arrow-counterclockwise"></i> Term Reset
-      </button>
       <button class="btn-logout" id="logoutBtn"><i class="bi bi-box-arrow-left"></i> Logout</button>
     </div>
   </aside>
@@ -57,7 +60,7 @@
   <div class="main-wrapper" id="mainWrapper">
     <div class="topbar">
       <button class="toggle-btn" id="toggleBtn"><i class="bi bi-list"></i></button>
-      <div style="font-weight:800;font-size:.95rem">Result Broadsheet</div>
+      <div style="font-weight:800;font-size:.95rem">SchoolNova</div>
       <div class="topbar-right">
         <div class="admin-info">
           <i class="bi bi-person-circle" style="font-size:1.2rem"></i>
@@ -72,25 +75,140 @@
       <!-- DASHBOARD -->
       <section class="section active" id="section-dashboard">
         <div class="page-title"><i class="bi bi-grid-fill" style="color:var(--primary)"></i> Dashboard</div>
-        <div class="stats-grid">
+
+        <!-- SHARED: Total Students, Male, Female + Current Week — visible to ALL roles -->
+        <div class="stats-grid" id="dashSharedCards">
           <div class="stat-card">
             <div class="stat-icon" style="background:var(--primary-light)"><i class="bi bi-people-fill" style="color:var(--primary)"></i></div>
             <div><div class="stat-val" id="statStudents">0</div><div class="stat-lbl">Total Students</div></div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon" style="background:var(--success-light)"><i class="bi bi-journal-bookmark-fill" style="color:var(--success)"></i></div>
-            <div><div class="stat-val" id="statClasses">12</div><div class="stat-lbl">Classes</div></div>
+            <div class="stat-icon" style="background:#dbeafe"><i class="bi bi-gender-male" style="color:#2563eb"></i></div>
+            <div><div class="stat-val" id="statMale">0</div><div class="stat-lbl">Male Students</div></div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon" style="background:var(--info-light)"><i class="bi bi-mortarboard-fill" style="color:var(--info)"></i></div>
-            <div><div class="stat-val" id="statSession">—</div><div class="stat-lbl">Session</div></div>
+            <div class="stat-icon" style="background:#fce7f3"><i class="bi bi-gender-female" style="color:#db2777"></i></div>
+            <div><div class="stat-val" id="statFemale">0</div><div class="stat-lbl">Female Students</div></div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon" style="background:var(--warning-light)"><i class="bi bi-calendar3" style="color:var(--warning)"></i></div>
-            <div><div class="stat-val" id="statTerm">—</div><div class="stat-lbl">Current Term</div></div>
+            <div class="stat-icon" style="background:#f0fdf4"><i class="bi bi-calendar-week-fill" style="color:#16a34a"></i></div>
+            <div style="min-width:0;flex:1;overflow:hidden">
+              <div class="stat-val" id="statCurrentWeek" style="color:#16a34a;font-size:1.2rem">—</div>
+              <div class="stat-lbl">Current Week</div>
+              <div id="statTotalWeeks" style="font-size:.68rem;color:var(--text-muted);margin-top:2px;word-break:break-word;line-height:1.3">— weeks this term</div>
+            </div>
           </div>
         </div>
-        <div class="grid grid-2">
+
+        <!-- ADMIN ONLY: School-wide attendance + analytics cards -->
+        <div id="dashAdminCards" style="display:none;margin-top:12px">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon" style="background:var(--success-light)"><i class="bi bi-journal-bookmark-fill" style="color:var(--success)"></i></div>
+              <div><div class="stat-val" id="statClasses">0</div><div class="stat-lbl">Classes</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:var(--info-light)"><i class="bi bi-mortarboard-fill" style="color:var(--info)"></i></div>
+              <div><div class="stat-val" id="statSession">—</div><div class="stat-lbl">Session</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:var(--warning-light)"><i class="bi bi-calendar3" style="color:var(--warning)"></i></div>
+              <div><div class="stat-val" id="statTerm">—</div><div class="stat-lbl">Current Term</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#d1fae5"><i class="bi bi-person-check-fill" style="color:#059669"></i></div>
+              <div><div class="stat-val" id="statAttToday" style="font-size:1.1rem">—</div><div class="stat-lbl">Today (AM + PM)</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#ede9fe"><i class="bi bi-calendar-week-fill" style="color:#7c3aed"></i></div>
+              <div><div class="stat-val" id="statAttWeek">—</div><div class="stat-lbl">Att. This Week (AM + PM)</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#fef3c7"><i class="bi bi-calendar-x-fill" style="color:#d97706"></i></div>
+              <div><div class="stat-val" id="statHolidays">—</div><div class="stat-lbl">Holidays This Term</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#dcfce7"><i class="bi bi-graph-up-arrow" style="color:#16a34a"></i></div>
+              <div><div class="stat-val" id="statAttTerm">—</div><div class="stat-lbl">Total Att. This Term (AM + PM)</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#e0f2fe"><i class="bi bi-percent" style="color:#0284c7"></i></div>
+              <div><div class="stat-val" id="statAttWeekPct">—</div><div class="stat-lbl">Att. % This Week</div></div>
+            </div>
+          </div>
+          <div class="grid grid-2" style="margin-top:16px">
+            <div class="card">
+              <div class="card-header"><h5><i class="bi bi-trophy-fill" style="color:#f59e0b"></i> 1st Position Per Class</h5></div>
+              <div class="card-body" style="padding:0">
+                <div id="firstPositionList" style="padding:12px;font-size:.85rem;color:var(--text-muted)">Loading…</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h5><i class="bi bi-star-fill" style="color:#10b981"></i> Highest Attendance Per Class</h5></div>
+              <div class="card-body" style="padding:0">
+                <div id="highAttendanceList" style="padding:12px;font-size:.85rem;color:var(--text-muted)">Loading…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FORM TEACHER ONLY: Class-specific attendance cards -->
+        <div id="dashFTCards" style="display:none;margin-top:12px">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon" style="background:var(--info-light)"><i class="bi bi-mortarboard-fill" style="color:var(--info)"></i></div>
+              <div><div class="stat-val" id="ftStatSession">—</div><div class="stat-lbl">Session</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:var(--warning-light)"><i class="bi bi-calendar3" style="color:var(--warning)"></i></div>
+              <div><div class="stat-val" id="ftStatTerm">—</div><div class="stat-lbl">Current Term</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#d1fae5"><i class="bi bi-person-check-fill" style="color:#059669"></i></div>
+              <div><div class="stat-val" id="ftStatAttToday" style="font-size:1.1rem">—</div><div class="stat-lbl">My Class Today (AM + PM)</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#ede9fe"><i class="bi bi-calendar-week-fill" style="color:#7c3aed"></i></div>
+              <div><div class="stat-val" id="ftStatAttWeek">—</div><div class="stat-lbl">This Week (AM + PM)</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#dcfce7"><i class="bi bi-graph-up-arrow" style="color:#16a34a"></i></div>
+              <div><div class="stat-val" id="ftStatAttTerm">—</div><div class="stat-lbl">This Term (AM + PM)</div></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#e0f2fe"><i class="bi bi-percent" style="color:#0284c7"></i></div>
+              <div><div class="stat-val" id="ftStatAttPct">—</div><div class="stat-lbl">Term Att. %</div></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:16px">
+            <div class="card-header"><h5><i class="bi bi-trophy-fill" style="color:#f59e0b"></i> Top 6 Students — My Class</h5></div>
+            <div class="card-body" style="padding:0">
+              <div id="ftFirstPositionList" style="padding:12px;font-size:.85rem;color:var(--text-muted)">Loading…</div>
+            </div>
+          </div>
+          <!-- Dual role: also show top 6 per subject -->
+          <div id="dashDualSTCard" style="display:none;margin-top:16px">
+            <div class="card">
+              <div class="card-header"><h5><i class="bi bi-award-fill" style="color:#f59e0b"></i> Top 6 Students Per Subject</h5></div>
+              <div class="card-body" style="padding:0">
+                <div id="dualStTopStudentsList" style="padding:12px;font-size:.85rem;color:var(--text-muted)">Loading…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUBJECT TEACHER ONLY: Top 6 students per subject per class -->
+        <div id="dashSTCards" style="display:none;margin-top:12px">
+          <div class="card">
+            <div class="card-header"><h5><i class="bi bi-award-fill" style="color:#f59e0b"></i> Top 6 Students Per Subject</h5></div>
+            <div class="card-body" style="padding:0">
+              <div id="stTopStudentsList" style="padding:12px;font-size:.85rem;color:var(--text-muted)">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Role info + Quick Access — all roles -->
+        <div class="grid grid-2" style="margin-top:16px">
           <div class="card">
             <div class="card-header"><h5><i class="bi bi-person-badge-fill"></i> Your Role</h5></div>
             <div class="card-body">
@@ -106,8 +224,10 @@
             <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
               <button class="btn btn-outline btn-sm" id="qa-scores"><i class="bi bi-pencil-square"></i> Enter Scores</button>
               <button class="btn btn-outline btn-sm" id="qa-broadsheet"><i class="bi bi-table"></i> View Broadsheet</button>
-              <button class="btn btn-outline btn-sm" id="qa-remarks" style="display:none"><i class="bi bi-chat-left-quote-fill"></i> Enter Remarks</button>
-              <button class="btn btn-outline btn-sm" id="qa-approval" style="display:none"><i class="bi bi-patch-check-fill"></i> Manage Approvals</button>
+              <button class="btn btn-outline btn-sm" id="qa-attendance"><i class="bi bi-calendar-check-fill"></i> Attendance</button>
+              <button class="btn btn-outline btn-sm" id="qa-results"><i class="bi bi-card-list"></i> Results</button>
+              <button class="btn btn-outline btn-sm" id="qa-recordbank"><i class="bi bi-archive-fill"></i> Record Bank</button>
+              <button class="btn btn-outline btn-sm" id="qa-approval"><i class="bi bi-patch-check-fill"></i> Manage Approvals</button>
             </div>
           </div>
         </div>
@@ -134,9 +254,9 @@
             <div class="table-wrap">
               <table class="table">
                 <thead><tr>
-                  <th>Reg No.</th><th>Full Name</th><th>Class</th><th>Arm</th><th>Gender</th><th>Subjects Offered</th><th>Actions</th>
+                  <th>Reg No.</th><th>Full Name</th><th>Class</th><th>Arm</th><th>Gender</th><th>Subjects Offered</th><th>Status</th><th>Actions</th>
                 </tr></thead>
-                <tbody id="studentsTable"><tr><td colspan="7" class="text-center" style="padding:30px;color:var(--text-muted)">Loading…</td></tr></tbody>
+                <tbody id="studentsTable"><tr><td colspan="8" class="text-center" style="padding:30px;color:var(--text-muted)">Loading…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -165,6 +285,18 @@
               </div>
             </div>
             <button class="btn btn-outline btn-sm mb-3" id="loadSubjectsBtn"><i class="bi bi-arrow-clockwise"></i> Load Subjects</button>
+
+            <!-- Copy from previous term notice — shown when subjects empty -->
+            <div id="copySubjectsNotice" style="display:none;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:14px 16px;margin-bottom:14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+                <div>
+                  <div style="font-weight:800;font-size:.88rem;color:#1d4ed8"><i class="bi bi-info-circle-fill"></i> No subjects found for this term</div>
+                  <div id="copySubjectsFrom" style="font-size:.8rem;color:#64748b;margin-top:3px"></div>
+                </div>
+                <button class="btn btn-primary btn-sm" id="copySubjectsBtn"><i class="bi bi-clipboard-check"></i> Copy Subjects</button>
+              </div>
+            </div>
+
             <div id="subjectsList" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;min-height:36px"></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <input type="text" id="newSubjectInput" class="form-control" placeholder="e.g. Mathematics" style="max-width:260px"/>
@@ -330,9 +462,197 @@
         </div>
       </section>
 
-      <!-- SETTINGS -->
-      <section class="section" id="section-settings">
+      <!-- PROMOTION — Admin only -->
+      <section class="section" id="section-promotion" style="display:none">
+        <div class="page-title"><i class="bi bi-arrow-up-circle-fill" style="color:var(--primary)"></i> Student Promotion</div>
+
+        <!-- Step 1: Select Source Class -->
+        <div class="card mb-3">
+          <div class="card-header"><h5><i class="bi bi-funnel-fill"></i> Step 1 — Select Class to Promote</h5></div>
+          <div class="card-body">
+            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">
+              Select the current class of students you want to promote. All students in that class will be listed below.
+            </p>
+            <div class="grid grid-3">
+              <div class="form-group">
+                <label class="form-label">From Class</label>
+                <select id="promFromClass" class="form-select"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">From Arm</label>
+                <select id="promFromArm" class="form-select">
+                  <option value="A">Arm A</option>
+                  <option value="B">Arm B</option>
+                </select>
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end">
+                <button class="btn btn-primary" style="width:100%" id="loadPromStudentsBtn">
+                  <i class="bi bi-people-fill"></i> Load Students
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Select Destination + Student List -->
+        <div id="promStudentsCard" style="display:none">
+          <div class="card mb-3">
+            <div class="card-header"><h5><i class="bi bi-arrow-right-circle-fill"></i> Step 2 — Destination</h5></div>
+            <div class="card-body">
+              <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">
+                Destination class is auto-suggested based on promotion chain. Deselect any student who is repeating.
+              </p>
+
+              <!-- Graduation Notice — shown when SS 3 selected -->
+              <div id="promGradNotice" style="display:none;background:#ede9fe;border:1.5px solid #c4b5fd;border-radius:10px;padding:14px 16px;margin-bottom:14px">
+                <div style="font-weight:800;font-size:.9rem;color:#5b21b6"><i class="bi bi-mortarboard-fill"></i> Graduation Mode</div>
+                <div style="font-size:.82rem;color:#6d28d9;margin-top:4px">
+                  SS 3 students will be marked as <strong>Graduated</strong>. They leave the active student list permanently
+                  but all their scores, attendance and results are preserved forever in the system.
+                </div>
+              </div>
+
+              <div class="grid grid-3">
+                <div class="form-group">
+                  <label class="form-label">To Class</label>
+                  <select id="promToClass" class="form-select"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">To Arm</label>
+                  <select id="promToArm" class="form-select">
+                    <option value="A">Arm A</option>
+                    <option value="B">Arm B</option>
+                  </select>
+                </div>
+                <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
+                  <button class="btn btn-outline btn-sm" id="promSelectAllBtn" style="flex:1">
+                    <i class="bi bi-check-all"></i> Select All
+                  </button>
+                  <button class="btn btn-outline btn-sm" id="promDeselectAllBtn" style="flex:1">
+                    <i class="bi bi-x-lg"></i> Deselect All
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Student List -->
+          <div class="card mb-3">
+            <div class="card-header">
+              <h5><i class="bi bi-people-fill"></i> Students <span id="promStudentCount" class="badge badge-primary" style="margin-left:8px"></span></h5>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div class="table-wrap">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th style="width:40px"><input type="checkbox" id="promCheckAll" style="width:16px;height:16px"/></th>
+                      <th>Reg Number</th>
+                      <th>Full Name</th>
+                      <th>Gender</th>
+                      <th>Current Class</th>
+                      <th>Next Class</th>
+                    </tr>
+                  </thead>
+                  <tbody id="promStudentTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Promote Button -->
+          <div class="card mb-3">
+            <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+              <div>
+                <div style="font-weight:800;font-size:.95rem">Ready to promote?</div>
+                <div style="font-size:.82rem;color:var(--text-muted);margin-top:2px" id="promSummaryText"></div>
+              </div>
+              <button class="btn btn-success" id="promoteBtn" style="min-width:180px">
+                <i class="bi bi-arrow-up-circle-fill"></i> Promote Students
+              </button>
+            </div>
+          </div>
+
+          <!-- Result -->
+          <div id="promResultBox" style="display:none"></div>
+        </div>
+      </section>
+
+      <!-- ALUMNI — Admin only -->
+      <section class="section" id="section-alumni" style="display:none">
+        <div class="page-title"><i class="bi bi-mortarboard-fill" style="color:var(--primary)"></i> Alumni & Inactive Students</div>
+
+        <!-- Filter tabs -->
+        <div class="card mb-3">
+          <div class="card-body" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-primary btn-sm" id="alumniTabGrad" onclick="loadAlumniTab('graduated')">
+              <i class="bi bi-mortarboard-fill"></i> Graduated
+            </button>
+            <button class="btn btn-outline btn-sm" id="alumniTabTransfer" onclick="loadAlumniTab('transferred')">
+              <i class="bi bi-box-arrow-right"></i> Transferred Out
+            </button>
+            <button class="btn btn-outline btn-sm" id="alumniTabInactive" onclick="loadAlumniTab('inactive')">
+              <i class="bi bi-person-dash-fill"></i> Removed Students
+            </button>
+            <span id="alumniCount" class="badge badge-primary" style="margin-left:auto"></span>
+          </div>
+        </div>
+
+        <!-- Alumni Table -->
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Reg No.</th>
+                    <th>Full Name</th>
+                    <th>Last Class</th>
+                    <th>Gender</th>
+                    <th>Status</th>
+                    <th>Session</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="alumniTable">
+                  <tr><td colspan="7" class="text-center" style="padding:30px;color:var(--text-muted)">
+                    Click a tab above to view students.
+                  </td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SETTINGS — Admin only, hidden by default -->
+      <section class="section" id="section-settings" style="display:none">
         <div class="page-title"><i class="bi bi-gear-fill" style="color:var(--primary)"></i> Settings</div>
+
+        <!-- Pending Users — Admin only -->
+        <div class="card" style="margin-bottom:16px;border-color:#f59e0b" id="pendingUsersCard">
+          <div class="card-header" style="background:#fffbeb">
+            <h5 style="color:#92400e"><i class="bi bi-person-exclamation-fill"></i> Pending User Approvals</h5>
+            <button class="btn btn-outline btn-sm" id="refreshPendingBtn"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div id="pendingUsersList" style="padding:12px;font-size:.85rem;color:var(--text-muted)">Loading...</div>
+          </div>
+        </div>
+
+        <!-- Teacher Names — Admin only -->
+        <div class="card" style="margin-bottom:16px" id="teacherNamesCard">
+          <div class="card-header">
+            <h5><i class="bi bi-person-badge-fill" style="color:var(--primary)"></i> Teacher Display Names</h5>
+            <button class="btn btn-primary btn-sm" id="saveTeacherNamesBtn"><i class="bi bi-save"></i> Save Names</button>
+          </div>
+          <div class="card-body">
+            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">
+              Enter display names for teachers added directly in Firebase. Their name will appear at the top of their dashboard instead of their email.
+            </p>
+            <div id="teacherNamesList"></div>
+          </div>
+        </div>
 
         <!-- School Identity -->
         <div class="card" style="margin-bottom:16px">
@@ -361,6 +681,19 @@
                   <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
                 </select>
               </div>
+              <div class="form-group">
+                <label class="form-label">Term Resumption Date</label>
+                <input type="date" id="termStartDate" class="form-control"/>
+                <small style="color:var(--text-muted);font-size:.75rem">First day school opens this term</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Term Closing Date</label>
+                <input type="date" id="termEndDate" class="form-control"/>
+                <small style="color:var(--text-muted);font-size:.75rem">Last day of school this term</small>
+              </div>
+            </div>
+            <div id="termWeeksInfo" style="display:none;background:var(--primary-light);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:.85rem;font-weight:700;color:var(--primary)">
+              <i class="bi bi-calendar-week"></i> <span id="termWeeksText"></span>
             </div>
             <button class="btn btn-primary" id="saveSessionBtn"><i class="bi bi-save"></i> Save Session</button>
           </div>
@@ -386,8 +719,21 @@
                 <label class="form-label">Class</label>
                 <select id="newFTClass" class="form-select">
                   <option value="">Select Class</option>
-                  <option>JS 1</option><option>JS 2</option><option>JS 3</option>
-                  <option>SS 1</option><option>SS 2</option><option>SS 3</option>
+                  <optgroup label="Senior Secondary">
+                    <option>SS 1</option><option>SS 2</option><option>SS 3</option>
+                  </optgroup>
+                  <optgroup label="Junior Secondary">
+                    <option>JS 1</option><option>JS 2</option><option>JS 3</option>
+                  </optgroup>
+                  <optgroup label="Basic">
+                    <option>Basic 1</option><option>Basic 2</option><option>Basic 3</option><option>Basic 4</option><option>Basic 5</option>
+                  </optgroup>
+                  <optgroup label="Nursery">
+                    <option>Nursery 1</option><option>Nursery 2</option><option>Nursery 3</option>
+                  </optgroup>
+                  <optgroup label="Creche">
+                    <option>Creche</option>
+                  </optgroup>
                 </select>
               </div>
               <button class="btn btn-success btn-sm" onclick="addFTRow()" style="height:38px">
@@ -428,9 +774,12 @@
                 <label class="form-label">Section</label>
                 <select id="newSTSection" class="form-select">
                   <option value="">Select Section</option>
-                  <option value="JS">Junior Secondary (JS)</option>
                   <option value="SS">Senior Secondary (SS)</option>
-                  <option value="ALL">Both Sections (JS &amp; SS)</option>
+                  <option value="JS">Junior Secondary (JS)</option>
+                  <option value="BASIC">Basic (1–5)</option>
+                  <option value="NURSERY">Nursery (1–3)</option>
+                  <option value="CRECHE">Creche</option>
+                  <option value="ALL">All Sections</option>
                 </select>
               </div>
             </div>
@@ -483,7 +832,403 @@
         </div>
       </section>
 
+      <!-- ATTENDANCE -->
+      <section class="section" id="section-attendance">
+        <div class="page-title"><i class="bi bi-calendar-check-fill" style="color:var(--primary)"></i> Attendance</div>
+
+        <!-- Tab switcher — teachers see Daily Entry only; admin sees all tabs -->
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap" id="attTabBar">
+          <button class="btn btn-primary btn-sm att-tab active" data-tab="att-daily"><i class="bi bi-pencil-square"></i> Daily Entry</button>
+          <button class="btn btn-outline btn-sm att-tab" data-tab="att-analytics" id="attTabAnalytics"><i class="bi bi-bar-chart-fill"></i> Analytics</button>
+          <button class="btn btn-outline btn-sm att-tab" data-tab="att-student" id="attTabStudent"><i class="bi bi-person-lines-fill"></i> Per-Student Summary</button>
+        </div>
+
+        <!-- DAILY ENTRY TAB -->
+        <div id="att-daily" class="att-tab-content">
+          <div class="card mb-3">
+            <div class="card-header"><h5><i class="bi bi-calendar-event-fill"></i> Daily Attendance Entry</h5></div>
+            <div class="card-body">
+              <div class="grid grid-4">
+                <div class="form-group">
+                  <label class="form-label">Class Arm</label>
+                  <select id="attClassArm" class="form-select"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Term</label>
+                  <select id="attTerm" class="form-select">
+                    <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Date</label>
+                  <input type="date" id="attDate" class="form-control"/>
+                </div>
+                <div class="form-group" style="display:flex;align-items:flex-end">
+                  <button class="btn btn-primary" style="width:100%" id="loadAttBtn"><i class="bi bi-search"></i> Load</button>
+                </div>
+              </div>
+              <div style="font-size:.8rem;color:var(--text-muted);margin-top:4px">
+                <span style="color:#10b981;font-weight:700">● Present = 2</span> (AM 1 + PM 1) &nbsp;
+                <span style="color:#f59e0b;font-weight:700">● Late = 0.5</span> &nbsp;
+                <span style="color:#ef4444;font-weight:700">● Absent = 0</span> &nbsp;
+                <span style="color:#6b7280;font-weight:700">● Holiday = H</span>
+              </div>
+            </div>
+          </div>
+          <div class="card" id="attEntryCard" style="display:none">
+            <div class="card-header">
+              <h5 id="attEntryTitle"><i class="bi bi-list-check"></i> Attendance</h5>
+              <div id="attHolidayBadge" style="display:none">
+                <span class="badge badge-warning"><i class="bi bi-calendar-x"></i> Holiday — Attendance Blocked</span>
+              </div>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div class="table-wrap">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Reg No.</th>
+                      <th>Student Name</th>
+                      <th>Gender</th>
+                      <th style="text-align:center">Morning<br><small>/1</small></th>
+                      <th style="text-align:center">Afternoon<br><small>/1</small></th>
+                      <th style="text-align:center">Total<br><small>/2</small></th>
+                      <th style="text-align:center">Status</th>
+                      <th>Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody id="attEntryTable"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card-body" style="border-top:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <button class="btn btn-success" id="saveAttBtn"><i class="bi bi-cloud-upload-fill"></i> Save Attendance</button>
+              <span style="font-size:.78rem;color:var(--text-muted)">Mon–Fri only. Saving updates existing record for this date.</span>
+            </div>
+          </div>
+
+          <!-- Daily History -->
+          <div class="card mt-3" id="attHistoryCard" style="display:none">
+            <div class="card-header"><h5><i class="bi bi-clock-history"></i> Daily History</h5></div>
+            <div class="card-body" id="attHistoryBody" style="font-size:.85rem"></div>
+          </div>
+        </div>
+
+        <!-- ANALYTICS TAB (Admin only) -->
+        <div id="att-analytics" class="att-tab-content" style="display:none">
+          <div class="card mb-3">
+            <div class="card-header"><h5><i class="bi bi-bar-chart-fill"></i> Class Attendance Analytics</h5></div>
+            <div class="card-body">
+              <div class="grid grid-3">
+                <div class="form-group">
+                  <label class="form-label">Class / Section</label>
+                  <select id="analyticsClass" class="form-select">
+                    <optgroup label="── Whole School ──">
+                      <option value="__ALL__">All Sections (Entire School)</option>
+                    </optgroup>
+                    <optgroup label="── By Section ──">
+                      <option value="__SECONDARY__">Secondary Section (SS + JS)</option>
+                      <option value="__BASIC_NURSERY_CRECHE__">Basic, Nursery &amp; Creche</option>
+                    </optgroup>
+                    <optgroup label="── Individual Class ──" id="analyticsClassGroup"></optgroup>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Term</label>
+                  <select id="analyticsTerm" class="form-select">
+                    <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+                  </select>
+                </div>
+                <div class="form-group" style="display:flex;align-items:flex-end">
+                  <button class="btn btn-primary" style="width:100%" id="generateAnalyticsBtn"><i class="bi bi-bar-chart-fill"></i> Generate Report</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section Summary (whole school / section view) -->
+          <div id="sectionSummaryResult" style="display:none;margin-bottom:16px">
+            <div class="card">
+              <div class="card-header"><h5 id="sectionSummaryTitle"><i class="bi bi-globe"></i> Section Summary</h5></div>
+              <div class="card-body">
+                <div class="stats-grid" id="sectionSummaryCards"></div>
+              </div>
+            </div>
+          </div>
+          <div id="analyticsResult" style="display:none">
+            <!-- Stat cards -->
+            <div class="stats-grid mb-3" id="analyticsCards"></div>
+            <!-- Weekly breakdown -->
+            <div class="card mb-3">
+              <div class="card-header"><h5><i class="bi bi-calendar-week"></i> Weekly Breakdown</h5></div>
+              <div class="card-body" style="padding:0">
+                <div class="table-wrap">
+                  <table class="table" id="weeklyTable">
+                    <thead><tr><th>Week</th><th>School Days</th><th>Boys Present</th><th>Girls Present</th><th>Total Present</th><th>Absent</th><th>% Attendance</th></tr></thead>
+                    <tbody id="weeklyTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <!-- Daily detail -->
+            <div class="card mb-3">
+              <div class="card-header"><h5><i class="bi bi-calendar3"></i> Daily Detail</h5></div>
+              <div class="card-body" style="padding:0">
+                <div class="table-wrap">
+                  <table class="table">
+                    <thead><tr><th>Date</th><th>Day</th><th>Boys Present</th><th>Girls Present</th><th>Present</th><th>Absent</th></tr></thead>
+                    <tbody id="dailyDetailBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <!-- Top student -->
+            <div id="analyticsTopStudent"></div>
+          </div>
+        </div>
+
+        <!-- PER-STUDENT SUMMARY TAB (Admin only) -->
+        <div id="att-student" class="att-tab-content" style="display:none">
+          <div class="card mb-3">
+            <div class="card-header"><h5><i class="bi bi-person-lines-fill"></i> Per-Student Attendance Summary</h5></div>
+            <div class="card-body">
+              <div class="grid grid-3">
+                <div class="form-group">
+                  <label class="form-label">Class</label>
+                  <select id="perStudentClass" class="form-select"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Term</label>
+                  <select id="perStudentTerm" class="form-select">
+                    <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+                  </select>
+                </div>
+                <div class="form-group" style="display:flex;align-items:flex-end">
+                  <button class="btn btn-primary" style="width:100%" id="loadPerStudentBtn"><i class="bi bi-arrow-clockwise"></i> Load</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card" id="perStudentCard" style="display:none">
+            <div class="card-header">
+              <h5 id="perStudentTitle"><i class="bi bi-people-fill"></i> Student Summary</h5>
+              <button class="btn btn-success btn-sm" id="exportPerStudentBtn"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div class="table-wrap">
+                <table class="table" id="perStudentTable">
+                  <thead id="perStudentThead"></thead>
+                  <tbody id="perStudentTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RESULTS — Admin and Form Teachers only -->
+      <section class="section" id="section-results">
+        <div class="page-title"><i class="bi bi-card-list" style="color:var(--primary)"></i> Results</div>
+        <div class="card mb-3">
+          <div class="card-header"><h5><i class="bi bi-search"></i> Load Student Result</h5></div>
+          <div class="card-body">
+            <div class="grid grid-4">
+              <div class="form-group">
+                <label class="form-label">Registration Number</label>
+                <input type="text" id="resRegNo" class="form-control" placeholder="e.g. SS1A2024001" style="text-transform:uppercase"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Academic Session</label>
+                <select id="resSession" class="form-select">
+                  <option value="">Loading sessions...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Term</label>
+                <select id="resTerm" class="form-select">
+                  <option value="1">1st Term</option>
+                  <option value="2">2nd Term</option>
+                  <option value="3">3rd Term</option>
+                </select>
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end">
+                <button class="btn btn-primary" style="width:100%" id="loadResultBtn">
+                  <i class="bi bi-search"></i> Load Result
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Result Display -->
+        <div id="resultDisplay" style="display:none">
+
+          <!-- Student Info Card -->
+          <div class="card mb-3">
+            <div class="card-body">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px" id="resStudentInfo"></div>
+            </div>
+          </div>
+
+          <!-- Scores Table -->
+          <div class="card mb-3">
+            <div class="card-header">
+              <h5><i class="bi bi-table"></i> Academic Scores</h5>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div class="table-wrap">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Subject</th>
+                      <th style="text-align:center">1st Test<br><small>/20</small></th>
+                      <th style="text-align:center">2nd Test<br><small>/20</small></th>
+                      <th style="text-align:center">Exam<br><small>/60</small></th>
+                      <th style="text-align:center">Total<br><small>/100</small></th>
+                      <th style="text-align:center">Grade</th>
+                    </tr>
+                  </thead>
+                  <tbody id="resScoreTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Summary -->
+          <div class="card mb-3">
+            <div class="card-header"><h5><i class="bi bi-bar-chart-fill"></i> Summary</h5></div>
+            <div class="card-body">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px" id="resSummaryCards"></div>
+              <div style="margin-top:16px;padding:14px;background:#f8fafc;border-radius:8px;border-left:4px solid var(--primary)" id="resRemarkBox"></div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- EXAM — Admin and Form Teachers only -->
+      <section class="section" id="section-exam">
+        <div class="page-title"><i class="bi bi-journal-text" style="color:var(--primary)"></i> Exam</div>
+        <div style="display:flex;align-items:center;justify-content:center;min-height:60vh">
+          <div style="text-align:center;max-width:480px;padding:40px 24px">
+            <div style="width:90px;height:90px;border-radius:50%;background:var(--primary-light);display:flex;align-items:center;justify-content:center;margin:0 auto 24px">
+              <i class="bi bi-journal-text" style="font-size:2.5rem;color:var(--primary)"></i>
+            </div>
+            <h3 style="font-weight:900;font-size:1.4rem;color:var(--primary);margin-bottom:12px">CBT Exam Portal</h3>
+            <p style="font-size:1rem;color:var(--text-muted);line-height:1.7;margin-bottom:24px">
+              Contact the developer for a <strong>CBT Portal</strong> for your school.
+            </p>
+            <div style="background:var(--primary-light);border-radius:12px;padding:20px 24px;margin-bottom:24px;border-left:4px solid var(--primary)">
+              <p style="font-size:.9rem;color:var(--text);margin:0;line-height:1.7">
+                <i class="bi bi-stars" style="color:var(--primary)"></i>
+                <strong> Create an Exam Portal for your school</strong> — Computer Based Testing (CBT) system for conducting exams, quizzes and assessments online. Students take exams on their devices and results are computed instantly.
+              </p>
+            </div>
+            <div style="background:#f0fdf4;border-radius:12px;padding:16px 20px;border:1.5px solid #bbf7d0">
+              <p style="font-size:.85rem;color:#065f46;margin:0;font-weight:700">
+                <i class="bi bi-whatsapp" style="color:#16a34a"></i>
+                Contact <strong>Brightest Digital Services</strong> to get started
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RECORD BANK — Admin only, hidden by default -->
+      <section class="section" id="section-recordbank" style="display:none">
+        <div class="page-title"><i class="bi bi-archive-fill" style="color:var(--primary)"></i> Record Bank</div>
+        <div class="card mb-3">
+          <div class="card-header"><h5><i class="bi bi-archive-fill"></i> Browse Past Records</h5></div>
+          <div class="card-body">
+            <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px">
+              All session and term data is stored permanently here for reference. Select a session, term and class to view records.
+            </p>
+            <div class="grid grid-4">
+              <div class="form-group">
+                <label class="form-label">Academic Session</label>
+                <select id="rbSession" class="form-select">
+                  <option value="">Loading sessions...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Term</label>
+                <select id="rbTerm" class="form-select">
+                  <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Class / Section</label>
+                <select id="rbClass" class="form-select">
+                  <optgroup label="── Whole School ──">
+                    <option value="__ALL__">All Sections (Entire School)</option>
+                  </optgroup>
+                  <optgroup label="── By Section ──">
+                    <option value="__SECONDARY__">Secondary Section (SS + JS)</option>
+                    <option value="__BASIC_NURSERY_CRECHE__">Basic, Nursery &amp; Creche</option>
+                  </optgroup>
+                  <optgroup label="── Individual Class ──" id="rbClassGroup"></optgroup>
+                </select>
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end">
+                <button class="btn btn-primary" style="width:100%" id="loadRecordBankBtn"><i class="bi bi-archive"></i> Load Records</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="recordBankResult" style="display:none">
+          <!-- Attendance Summary -->
+          <div class="card mb-3">
+            <div class="card-header"><h5><i class="bi bi-calendar-check-fill"></i> Class Attendance Summary</h5></div>
+            <div class="card-body">
+              <div class="stats-grid" id="rbAttCards"></div>
+              <div class="table-wrap mt-3">
+                <table class="table">
+                  <thead><tr><th>Week</th><th>School Days Open</th><th>Total Present</th><th>Boys Present</th><th>Girls Present</th><th>Attendance %</th></tr></thead>
+                  <tbody id="rbWeeklyBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Individual Student Summary -->
+          <div class="card mb-3">
+            <div class="card-header">
+              <h5><i class="bi bi-person-fill"></i> Individual Student Summary</h5>
+              <button class="btn btn-success btn-sm" id="exportRbStudentBtn"><i class="bi bi-file-earmark-excel-fill"></i> Download Excel</button>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div class="table-wrap">
+                <table class="table" id="rbStudentTable">
+                  <thead id="rbStudentThead"></thead>
+                  <tbody id="rbStudentBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Broadsheet Record -->
+          <div class="card" id="rbBroadsheetCard">
+            <div class="card-header"><h5><i class="bi bi-table"></i> Broadsheet Record</h5></div>
+            <div class="card-body" style="padding:0">
+              <div class="broadsheet-wrap">
+                <table class="broadsheet-table">
+                  <thead id="rbBsThead"></thead>
+                  <tbody id="rbBsTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </div><!-- end main-content -->
+
+    <!-- Footer -->
+        <p class="footer-inline" style="text-align:center;font-size:.72rem;color:var(--text-muted);margin-top:20px">
+      &copy; 2026 SchoolNova by Brightest Digital Services. All rights reserved.
+    </p>
+
   </div><!-- end main-wrapper -->
 </div><!-- end app-layout -->
 
@@ -509,8 +1254,21 @@
           <label class="form-label">Class <span style="color:red">*</span></label>
           <select id="sClass" class="form-select">
             <option value="">Select Class</option>
-            <option>JS 1</option><option>JS 2</option><option>JS 3</option>
-            <option>SS 1</option><option>SS 2</option><option>SS 3</option>
+            <optgroup label="Senior Secondary">
+              <option>SS 1</option><option>SS 2</option><option>SS 3</option>
+            </optgroup>
+            <optgroup label="Junior Secondary">
+              <option>JS 1</option><option>JS 2</option><option>JS 3</option>
+            </optgroup>
+            <optgroup label="Basic">
+              <option>Basic 1</option><option>Basic 2</option><option>Basic 3</option><option>Basic 4</option><option>Basic 5</option>
+            </optgroup>
+            <optgroup label="Nursery">
+              <option>Nursery 1</option><option>Nursery 2</option><option>Nursery 3</option>
+            </optgroup>
+            <optgroup label="Creche">
+              <option>Creche</option>
+            </optgroup>
           </select>
         </div>
         <div class="form-group">
@@ -524,6 +1282,14 @@
           <select id="sGender" class="form-select">
             <option value="">Select</option><option>Male</option><option>Female</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Parent/Guardian Phone</label>
+          <input type="tel" id="sParentPhone" class="form-control" placeholder="e.g. 08012345678"/>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Parent/Guardian Address</label>
+          <input type="text" id="sParentAddr" class="form-control" placeholder="e.g. 12 Main Street, Lagos"/>
         </div>
       </div>
 
@@ -544,6 +1310,9 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" data-close="studentModal">Cancel</button>
+      <button class="btn btn-warning btn-sm" id="transferStudentBtn" style="display:none">
+        <i class="bi bi-box-arrow-right"></i> Transfer Out
+      </button>
       <button class="btn btn-primary" id="saveStudentBtn"><i class="bi bi-save"></i> Save Student</button>
     </div>
   </div>
@@ -564,35 +1333,6 @@
   </div>
 </div>
 
-<!-- TERM RESET MODAL -->
-<div class="modal-backdrop" id="resetModal">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-header">
-      <h5><i class="bi bi-exclamation-triangle-fill" style="color:var(--warning)"></i> Term Reset</h5>
-      <button class="modal-close" data-close="resetModal">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="alert alert-warning mb-3">
-        <i class="bi bi-exclamation-triangle-fill"></i>
-        This will permanently delete ALL scores, remarks and approvals for the selected term. Student records are kept.
-      </div>
-      <div class="form-group">
-        <label class="form-label">Select Term to Reset</label>
-        <select id="resetTerm" class="form-select">
-          <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Type <strong>RESET</strong> to confirm</label>
-        <input type="text" id="resetConfirmInput" class="form-control" placeholder="RESET"/>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" data-close="resetModal">Cancel</button>
-      <button class="btn btn-danger" id="confirmResetBtn"><i class="bi bi-trash3-fill"></i> Reset Term Data</button>
-    </div>
-  </div>
-</div>
 
 <script type="module" src="admin-dashboard.js"></script>
 </body>

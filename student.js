@@ -9,7 +9,9 @@ import {
   getSession,
   isResultApproved,
   getScoresByClassArmSubjectTerm,
-  getStudentsByClassArm
+  getStudentsByClassArm,
+  getAttendanceByStudent,
+  getHolidays
 } from "./firebase.js";
 
 const S          = id => document.getElementById(id);
@@ -46,7 +48,7 @@ async function loadResult() {
     if (!student) { showError("Registration number not found. Please check and try again."); return; }
 
     // ── CLASS APPROVAL CHECK ──────────────────────────────────
-    const approved = await isResultApproved(student.classArm, term);
+    const approved = await isResultApproved(student.classArm, term, session.session||"");
     if (!approved) {
       S("loadingState").classList.add("hidden");
       S("notApprovedState").classList.remove("hidden");
@@ -54,16 +56,25 @@ async function loadResult() {
       return;
     }
 
-    // Load scores and remark
-    const [scores, remark] = await Promise.all([
+    // Load scores — no session filter, then client-side filter:
+    // Include old untagged scores (no session) + current session scores only
+    const [allScoresRaw, remark] = await Promise.all([
       getScoresByStudentTerm(reg, term),
-      getRemarkByStudentTerm(reg, term)
+      getRemarkByStudentTerm(reg, term, session.session||"")
     ]);
+    const currentSession = session.session || "";
+    // Old score = no session field (belongs to current session until Admin changes)
+    // New score = has session field (only show if matches current session)
+    const scores = allScoresRaw.filter(sc => !sc.session || sc.session === currentSession);
+
+    // Get classArm from scores — shows correct class when scores were earned
+    // If student was promoted, this shows the class they were in, not their current class
+    const scoreClassArm = scores.length > 0 ? (scores[0].classArm || student.classArm) : student.classArm;
 
     // Fill student info
     S("rcName").textContent   = student.fullName  || "—";
     S("rcReg").textContent    = student.regNumber || reg;
-    S("rcClass").textContent  = student.classArm  || "—";
+    S("rcClass").textContent  = scoreClassArm || "—";
     S("rcGender").textContent = student.gender    || "—";
     S("rcTerm").textContent   = termLabels[term]  || `Term ${term}`;
     S("rcDate").textContent   = `Printed: ${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})}`;
@@ -83,12 +94,13 @@ async function loadResult() {
     const subjects = Object.keys(myScores).sort();
 
     // Calculate per-subject position within same arm
-    const armStudents = await getStudentsByClassArm(student.classArm);
+    // Use scoreClassArm (class when scores were earned) not student.classArm (current class)
+    const armStudents = await getStudentsByClassArm(scoreClassArm);
     const armRegs     = armStudents.map(s => s.regNumber);
     const positionMap = {};
     await Promise.all(subjects.map(async subject => {
-      const allSc  = await getScoresByClassArmSubjectTerm(student.classArm, subject, term);
-      const armSc  = allSc.filter(s => armRegs.includes(s.regNumber));
+      const allSc  = await getScoresByClassArmSubjectTerm(scoreClassArm, subject, term);
+      const armSc  = allSc.filter(s => armRegs.includes(s.regNumber) && (!s.session || s.session === currentSession));
       const sorted = armSc
         .map(s => ({ reg: s.regNumber, total: (s.test1||0)+(s.test2||0)+(s.exam||0) }))
         .sort((a,b) => b.total - a.total);
@@ -115,11 +127,13 @@ async function loadResult() {
       </tr>`;
     }).join("");
 
-    // Overall position in arm
+    // Overall position in arm — no session filter, client-side filter for old scores
     const allArmTotals = await Promise.all(
       armStudents.map(async s => {
         const sc  = await getScoresByStudentTerm(s.regNumber, term);
-        const tot = sc.reduce((sum,r)=>sum+(r.test1||0)+(r.test2||0)+(r.exam||0),0);
+        const tot = sc
+          .filter(r => !r.session || r.session === currentSession)
+          .reduce((sum,r)=>sum+(r.test1||0)+(r.test2||0)+(r.exam||0),0);
         return { reg: s.regNumber, total: tot };
       })
     );
@@ -137,6 +151,9 @@ async function loadResult() {
     S("loadingState").classList.add("hidden");
     S("resultContent").classList.remove("hidden");
 
+    // Load attendance after result shown
+    loadAttendance(student, session, term);
+
     S("downloadPdfBtn").addEventListener("click", () =>
       downloadPDF(student, subjects, myScores, positionMap, grandTotal, avg, posStr, remark, session, term)
     );
@@ -145,6 +162,85 @@ async function loadResult() {
     console.error(e);
     showError("Failed to load result. Please check your connection and try again.");
   }
+}
+
+// ── Attendance Section ────────────────────────────────────────
+async function loadAttendance(student, session, term) {
+  try {
+    const [attRecs, holidays] = await Promise.all([
+      getAttendanceByStudent(student.regNumber, term, session.session||""),
+      getHolidays(session.session||"", term)
+    ]);
+
+    const holidayDates = new Set(holidays.map(h => h.date));
+    attRecs.filter(r => r.status === "Holiday").forEach(r => holidayDates.add(r.date));
+    const nonHolRecs = attRecs.filter(r => r.status !== "Holiday" && !holidayDates.has(r.date));
+
+    if (!nonHolRecs.length) return; // no attendance data — keep section hidden
+
+    // School days open
+    const schoolDates = [...new Set(nonHolRecs.map(r => r.date))].filter(d => {
+      const day = new Date(d).getDay(); return day !== 0 && day !== 6;
+    }).sort();
+    const schoolDays = schoolDates.length;
+    const possible   = schoolDays * 2;
+
+    // Total AM + PM
+    const presRecs = nonHolRecs.filter(r => r.status === "Present");
+    const totalAM  = presRecs.reduce((s, r) => s + (r.morning||0), 0);
+    const totalPM  = presRecs.reduce((s, r) => s + (r.afternoon||0), 0);
+    const totalPres = totalAM + totalPM;
+    const pct       = possible > 0 ? ((totalPres / possible) * 100).toFixed(1) : "0";
+    const avg       = schoolDays > 0 ? (totalPres / schoolDays).toFixed(2) : "0";
+
+    S("attTotal").innerHTML  = totalAM + "+" + totalPM;
+    S("attTotalSub").textContent = "Total: " + totalPres + " sessions";
+    S("attPct").textContent  = pct + "%";
+    S("attPctSub").textContent = totalPres + " of " + possible + " possible";
+    S("attAvg").textContent  = avg;
+
+    // Build weekly breakdown using term start date
+    const termStart = session.termStartDate ? new Date(session.termStartDate) : null;
+    const byWeek = {};
+    schoolDates.forEach(d => {
+      let wk;
+      if (termStart) {
+        const diff = Math.floor((new Date(d) - termStart) / (7*24*60*60*1000));
+        wk = "Week " + (diff + 1);
+      } else {
+        const dt = new Date(d);
+        dt.setHours(0,0,0,0);
+        dt.setDate(dt.getDate() + 3 - (dt.getDay()+6)%7);
+        const w1 = new Date(dt.getFullYear(),0,4);
+        wk = "Week " + (1 + Math.round(((dt-w1)/86400000 - 3 + (w1.getDay()+6)%7)/7));
+      }
+      if (!byWeek[wk]) byWeek[wk] = { am:0, pm:0, days:0 };
+      byWeek[wk].days++;
+      const dayRec = presRecs.filter(r => r.date === d);
+      byWeek[wk].am += dayRec.reduce((s,r) => s+(r.morning||0), 0);
+      byWeek[wk].pm += dayRec.reduce((s,r) => s+(r.afternoon||0), 0);
+    });
+
+    const weekKeys = Object.keys(byWeek).sort((a,b) => parseInt(a.split(" ")[1]) - parseInt(b.split(" ")[1]));
+    const pctClass = p => parseFloat(p) >= 75 ? "#16a34a" : parseFloat(p) >= 50 ? "#d97706" : "#dc2626";
+
+    S("attWeeklyTbody").innerHTML = weekKeys.map(wk => {
+      const w      = byWeek[wk];
+      const tot    = w.am + w.pm;
+      const maxWk  = w.days * 2;
+      const wkPct  = maxWk > 0 ? ((tot / maxWk) * 100).toFixed(1) : "0";
+      return `<tr>
+        <td style="font-weight:700">${wk}</td>
+        <td style="text-align:center">${w.am}</td>
+        <td style="text-align:center">${w.pm}</td>
+        <td style="text-align:center;font-weight:800">${tot}</td>
+        <td style="text-align:center;color:var(--text-muted)">${maxWk}</td>
+        <td style="text-align:center;font-weight:800;color:${pctClass(wkPct)}">${wkPct}%</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text-muted)">No weekly data.</td></tr>`;
+
+    S("attendanceSection").style.display = "block";
+  } catch(e) { console.error("Attendance load error:", e); }
 }
 
 function showError(msg) {

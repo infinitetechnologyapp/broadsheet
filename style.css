@@ -323,7 +323,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .toggle-btn {
   background: none; border: none; font-size: 1.2rem; cursor: pointer;
-  color: var(--text-muted); padding: 6px; border-radius: 6px; transition: all .2s;
+  color: var(--primary); padding: 6px; border-radius: 6px; transition: all .2s;
 }
 .toggle-btn:hover { background: var(--primary-light); color: var(--primary); }
 .topbar-right { display: flex; align-items: center; gap: 14px; }
@@ -337,17 +337,28 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .section.active { display: block; }
 
 /* ── Stat Cards ──────────────────────────────────────────────── */
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 16px; margin-bottom: 24px; }
 .stat-card {
   background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow);
-  padding: 20px; display: flex; align-items: center; gap: 16px;
+  padding: 16px; display: flex; align-items: flex-start; gap: 12px;
+  overflow: hidden; min-width: 0;
 }
+.stat-card > div:last-child { min-width: 0; flex: 1; overflow: hidden; }
 .stat-icon {
-  width: 48px; height: 48px; border-radius: 12px; display: flex;
-  align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0;
+  width: 44px; height: 44px; border-radius: 12px; display: flex;
+  align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;
 }
-.stat-val { font-size: 1.6rem; font-weight: 900; line-height: 1; }
-.stat-lbl { font-size: .75rem; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
+.stat-val {
+  font-size: 1.4rem; font-weight: 900; line-height: 1.1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Week card uses stacked innerHTML — allow it to wrap */
+.stat-val:has(span) {
+  white-space: normal; overflow: visible; text-overflow: unset;
+}
+.stat-lbl {
+  font-size: .72rem; color: var(--text-muted); font-weight: 600; margin-top: 3px;
+  white-space: normal; word-break: break-word; line-height: 1.3;
+}
 
 /* ── Overlay ─────────────────────────────────────────────────── */
 .sidebar-overlay {
@@ -444,6 +455,30 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .portal-card h6 { font-size: .9rem; font-weight: 800; }
 .portal-card p  { font-size: .75rem; color: var(--text-muted); }
 
+/* ── Carousel ─────────────────────────────────────────────────── */
+#carousel { user-select: none; }
+#carouselTrack { display: flex; transition: transform .5s ease; }
+.c-slide {
+  min-width: 100%; box-sizing: border-box;
+  border-radius: 14px; padding: 28px 24px;
+  color: #fff; text-align: center;
+}
+.c-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #cbd5e1; cursor: pointer; display: inline-block;
+  transition: background .3s, transform .3s;
+}
+.c-dot.active { background: #4f46e5; transform: scale(1.3); }
+#carousel button {
+  position: absolute; top: 45%; transform: translateY(-50%);
+  background: rgba(255,255,255,.25); border: none;
+  border-radius: 50%; width: 32px; height: 32px;
+  color: #fff; font-size: 1.1rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .2s;
+}
+#carousel button:hover { background: rgba(255,255,255,.4); }
+
 /* ── Student Result Page ─────────────────────────────────────── */
 .result-page { max-width: 900px; margin: 0 auto; padding: 24px; }
 .result-header {
@@ -504,3 +539,70 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   letter-spacing: .2px;
 }
 .footer-inline span { color: var(--primary); font-weight: 800; }
+
+.att-tab { transition: all .2s; }
+.att-tab.active { background: var(--primary) !important; color: #fff !important; border-color: var(--primary) !important; }
+.att-tab-content { display: none; }
+.att-tab-content:first-of-type { display: block; }
+#att-daily { display: block; }
+
+/* ── Attendance status colors ───────────────────────────────── */
+.att-present { color: #10b981; font-weight: 800; }
+.att-absent  { color: #ef4444; font-weight: 800; }
+.att-late    { color: #f59e0b; font-weight: 800; }
+.att-holiday { color: #6b7280; font-weight: 800; }
+
+/* ── Gender badges ───────────────────────────────────────────── */
+.badge-pink { background: #fce7f3; color: #db2777; }
+.badge-blue { background: #dbeafe; color: #2563eb; }
+
+/* ── Attendance select sizing ───────────────────────────────── */
+.form-select-sm {
+  padding: 5px 8px; font-size: .8rem;
+  border: 1.5px solid var(--border); border-radius: 6px;
+  font-family: 'Nunito', sans-serif; background: var(--white);
+  color: var(--text); outline: none; cursor: pointer;
+}
+.form-select-sm:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+
+/* ── Attendance history card ────────────────────────────────── */
+.att-history-day {
+  background: var(--success-light); border-radius: var(--radius-sm);
+  padding: 8px 14px; margin-bottom: 6px; font-size: .83rem; font-weight: 700;
+  color: #166534; display: flex; justify-content: space-between; align-items: center;
+}
+
+/* ── Record Bank ─────────────────────────────────────────────── */
+.rb-stat { background: var(--white); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 14px 18px; }
+.rb-stat-val { font-size: 1.4rem; font-weight: 900; color: var(--primary); }
+.rb-stat-lbl { font-size: .75rem; color: var(--text-muted); font-weight: 700; margin-top: 2px; }
+
+/* ── Dashboard first/highest position lists ─────────────────── */
+#firstPositionList, #highAttendanceList {
+  max-height: 320px; overflow-y: auto;
+}
+.position-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: .83rem;
+}
+.position-item:last-child { border-bottom: none; }
+.position-item .class-tag {
+  font-weight: 800; color: var(--primary); font-size: .75rem;
+  background: var(--primary-light); padding: 2px 8px; border-radius: 99px;
+}
+.position-item .student-name { font-weight: 700; }
+.position-item .score-tag {
+  font-size: .75rem; font-weight: 800;
+  background: var(--success-light); color: #166534;
+  padding: 2px 8px; border-radius: 99px;
+}
+
+/* ── Stats grid — 8 cards on dashboard ─────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+@media (max-width: 640px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1200px) {
+  .stats-grid { grid-template-columns: repeat(4, 1fr); }
+}
+

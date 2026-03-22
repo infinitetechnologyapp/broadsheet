@@ -4,44 +4,70 @@
 // ============================================================
 import {
   onAuthChange, authLogout,
-  addStudent, updateStudent, deleteStudent, changeStudentReg,
-  getAllStudents, getStudentsByClassArm,
-  saveScore, getScoresByClassArmSubjectTerm, getScoresByClassArmTerm,
+  db, firestoreDoc, firestoreGetDoc,
+  firestoreCollection, firestoreGetDocs,
+  addStudent, updateStudent, deleteStudent, restoreStudent,
+  graduateStudent, transferStudent, changeStudentReg,
+  getAllStudents, getActiveStudents, getAlumniStudents, getInactiveStudents,
+  getStudentsByClass, getStudentsByClassArm, getStudentByReg,
+  saveScore, deleteScoreById, tagAllUntaggedScores, getScoresByClassArmSubjectTerm, getScoresByClassArmTerm,
+  getScoresByStudentTerm,
   saveClassSubjects, getClassSubjects, getSubjectsBySection,
-  saveRemark, getRemarksByClassArmTerm,
+  saveRemark, getRemarksByClassArmTerm, getRemarkByStudentTerm,
   saveSession, getSession, saveTeachers, getTeachers,
   approveResults, revokeApproval, getAllApprovals,
-  resetTermData, fixAllStudentClassArms
+  fixAllStudentClassArms,
+  getPendingUsers, approvePendingUser,
+  saveTeacherNames, getTeacherNames,
+  saveAttendance, getAttendanceByClassDate,
+  getAttendanceByClassTerm, getAttendanceByClassBaseTerm,
+  getAllAttendanceByTerm, getAttendanceByStudent,
+  saveHoliday, deleteHoliday, getHolidays
 } from "./firebase.js";
 
 // ══════════════════════════════════════════════════════════════
 //  RBAC CONFIGURATION
-//  Update all emails to match real teacher Firebase accounts.
-//
-//  FIX #5: Dual-role teacher (Form Teacher + Subject Teacher)
-//  → Add their email in BOTH FORM_TEACHERS and SUBJECT_TEACHERS
-//  → Dashboard will show them BOTH sections simultaneously
 // ══════════════════════════════════════════════════════════════
-
-// Add as many master admin emails as needed
 const MASTER_ADMINS = [
   "infinitetechnology04@gmail.com".toLowerCase(),
   "macpeppleibim@gmail.com".toLowerCase(),
-  // "secondadmin@gmail.com".toLowerCase(),
 ];
 
-// Teacher roles — loaded from Firestore at runtime by master admin
-// These start empty and get populated by loadTeachers() on init
 let FORM_TEACHERS    = {};
 let SUBJECT_TEACHERS = {};
 
 // ── Constants ─────────────────────────────────────────────────
-const ALL_ARMS    = ["JS 1A","JS 1B","JS 2A","JS 2B","JS 3A","JS 3B",
-                     "SS 1A","SS 1B","SS 2A","SS 2B","SS 3A","SS 3B"];
-const ALL_CLASSES = ["JS 1","JS 2","JS 3","SS 1","SS 2","SS 3"];
+const SS_ARMS      = ["SS 1A","SS 1B","SS 2A","SS 2B","SS 3A","SS 3B"];
+const JS_ARMS_C    = ["JS 1A","JS 1B","JS 2A","JS 2B","JS 3A","JS 3B"];
+const BASIC_ARMS   = ["Basic 1A","Basic 1B","Basic 2A","Basic 2B","Basic 3A","Basic 3B","Basic 4A","Basic 4B","Basic 5A","Basic 5B"];
+const NURSERY_ARMS = ["Nursery 1A","Nursery 1B","Nursery 2A","Nursery 2B","Nursery 3A","Nursery 3B"];
+const CRECHE_ARMS  = ["CrecheA","CrecheB"];
+
+const ALL_ARMS = [
+  ...SS_ARMS, ...JS_ARMS_C, ...BASIC_ARMS, ...NURSERY_ARMS, ...CRECHE_ARMS
+];
+
+const SS_CLASSES      = ["SS 1","SS 2","SS 3"];
+const JS_CLASSES      = ["JS 1","JS 2","JS 3"];
+const BASIC_CLASSES   = ["Basic 1","Basic 2","Basic 3","Basic 4","Basic 5"];
+const NURSERY_CLASSES = ["Nursery 1","Nursery 2","Nursery 3"];
+const CRECHE_CLASSES  = ["Creche"];
+
+const ALL_CLASSES = [
+  ...SS_CLASSES, ...JS_CLASSES, ...BASIC_CLASSES, ...NURSERY_CLASSES, ...CRECHE_CLASSES
+];
+
 const TERM_LABELS = { "1":"1st Term","2":"2nd Term","3":"3rd Term" };
-// FIX: "JS 1A" → "JS 1",  "SS 3B" → "SS 3"
-const armToBase = arm => arm ? arm.trim().slice(0, -1).trim() : "";
+
+// armToBase: strips last character (arm letter) + trims
+// "JS 1A" → "JS 1", "Basic 1A" → "Basic 1", "CrecheA" → "Creche"
+const armToBase = arm => {
+  if (!arm) return "";
+  const t = arm.trim();
+  // Creche special case
+  if (t === "CrecheA" || t === "CrecheB") return "Creche";
+  return t.slice(0, -1).trim();
+};
 
 // ── Role State ────────────────────────────────────────────────
 let _user = null, _isMaster = false, _isFT = false, _isST = false;
@@ -131,16 +157,27 @@ applyLayout();
 
 // ── Section nav ───────────────────────────────────────────────
 window.showSection = id => {
-  document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+  if (!_isMaster && (id === "section-settings" || id === "section-recordbank")) return;
+  // Hide all sections
+  document.querySelectorAll(".section").forEach(s => {
+    s.classList.remove("active");
+    s.style.display = "none";
+  });
   document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
-  $(id)?.classList.add("active");
+  const target = $(id);
+  if (target) {
+    target.classList.add("active");
+    target.style.display = "block";
+  }
   document.querySelector(`[data-section="${id}"]`)?.classList.add("active");
   if (window.innerWidth < 992) { sidebarOpen = false; applyLayout(); }
 };
 document.querySelectorAll(".nav-item").forEach(item => item.addEventListener("click", () => showSection(item.dataset.section)));
-["scores","broadsheet","remarks","approval"].forEach(k => {
+["scores","broadsheet","attendance","results"].forEach(k => {
   $(`qa-${k}`)?.addEventListener("click", () => showSection(`section-${k}`));
 });
+$("qa-recordbank")?.addEventListener("click", () => showSection("section-recordbank"));
+$("qa-approval")?.addEventListener("click",   () => showSection("section-approval"));
 
 // ── Auth ──────────────────────────────────────────────────────
 let _students = [];
@@ -171,9 +208,9 @@ onAuthChange(async user => {
 });
 
 // Safety: if Firebase auth takes too long, don't leave user on blank screen
-setTimeout(() => {
+setTimeout(function() {
   if (!_authResolved) window.location.href = "admin-login.html";
-}, 8000);
+}, 15000);
 
 $("logoutBtn").addEventListener("click", async () => { await authLogout(); window.location.href = "admin-login.html"; });
 
@@ -187,26 +224,59 @@ function applyRoleUI() {
   else if (_isFT && _isST) badge = `<span class="badge badge-primary" style="font-size:.6rem;margin-left:6px">Form+Subject · ${_ftClass}</span>`;
   else if (_isFT)           badge = `<span class="badge badge-info" style="font-size:.6rem;margin-left:6px">Form Teacher · ${_ftClass}</span>`;
   else if (_isST)           badge = `<span class="badge badge-success" style="font-size:.6rem;margin-left:6px">Subject Teacher</span>`;
+
+  // Show email first, then replace with name if found in pendingUsers
   const el = $("adminEmailDisplay");
   if (el) el.innerHTML = (_user?.email||"") + badge;
 
-  // Reset btn
-  $("openResetBtn").style.display = _isMaster ? "flex" : "none";
+  // Try to fetch display name — check teacherNames first, then pendingUsers
+  if (_user && !_isMaster) {
+    getTeacherNames().then(namesMap => {
+      const email = (_user.email||"").toLowerCase().trim();
+      if (namesMap[email]) {
+        if (el) el.innerHTML = namesMap[email] + badge;
+      } else {
+        // Fallback: check pendingUsers collection
+        firestoreGetDoc(firestoreDoc(db, "pendingUsers", _user.uid)).then(snap => {
+          if (snap.exists() && snap.data().name) {
+            if (el) el.innerHTML = snap.data().name + badge;
+          }
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+  }
+
+  // Hide pending users and teacher names cards for non-admins
+  const puCard = $("pendingUsersCard");
+  if (puCard) puCard.style.display = _isMaster ? "block" : "none";
+  const tnCard = $("teacherNamesCard");
+  if (tnCard) tnCard.style.display = _isMaster ? "block" : "none";
 
   // Sidebar nav items
   setDisplayFlex("nav-students",   _isMaster || _isFT);
   setDisplayFlex("nav-subjects",   _isMaster || _isFT);
-  // FIX #5/#7: Scores tab shows for subject teachers (includes dual-role)
   setDisplayFlex("nav-scores",     _isMaster || _isST || _isFT);
   setDisplayFlex("nav-remarks",    _isMaster || _isFT);
   setDisplayFlex("nav-approval",   _isMaster);
+  setDisplayFlex("nav-promotion",  _isMaster);
+  setDisplayFlex("nav-alumni",     _isMaster);
+  setDisplayFlex("nav-results",     _isMaster || _isFT);
+  setDisplayFlex("nav-exam",        _isMaster || _isFT);
   setDisplayFlex("nav-settings",   _isMaster);
   setDisplayFlex("nav-broadsheet", true);
+  setDisplayFlex("nav-attendance", _isMaster || _isFT);
+  setDisplayFlex("nav-recordbank", _isMaster);
 
-  // Quick access
-  setDisplay("qa-remarks",  _isMaster || _isFT);
-  setDisplay("qa-approval", _isMaster);
-  setDisplay("qa-scores",   _isMaster || _isST || _isFT);
+  // Quick access — role based
+  // Admin: all buttons
+  // Form Teacher: scores, broadsheet, attendance, results
+  // Subject Teacher: scores, broadsheet only
+  setDisplay("qa-scores",     _isMaster || _isST || _isFT);
+  setDisplay("qa-broadsheet", true);
+  setDisplay("qa-attendance", _isMaster || _isFT);
+  setDisplay("qa-results",    _isMaster || _isFT);
+  setDisplay("qa-recordbank", _isMaster);
+  setDisplay("qa-approval",   _isMaster);
 
   // Role info card
   const ri = $("roleInfoCard");
@@ -229,8 +299,21 @@ function applyRoleUI() {
   const dn = $("dualRoleNotice");
   if (dn) dn.style.display = (_isFT && _isST) ? "block" : "none";
 
+  // Role-based dashboard sections
+  const adminCards = $("dashAdminCards");
+  const ftCards    = $("dashFTCards");
+  const stCards    = $("dashSTCards");
+  const dualSTCard = $("dashDualSTCard");
+  if (adminCards) adminCards.style.display = _isMaster ? "block" : "none";
+  if (ftCards)    ftCards.style.display    = (_isFT && !_isMaster) ? "block" : "none";
+  if (stCards)    stCards.style.display    = (_isST && !_isFT && !_isMaster) ? "block" : "none";
+  // Dual role: show top 6 subject card inside FT section
+  if (dualSTCard) dualSTCard.style.display = (_isFT && _isST && !_isMaster) ? "block" : "none";
+
   buildDropdowns();
-  renderTeacherRows(); // Populate teacher tables now that _isMaster is resolved
+  renderTeacherRows();
+  applyAttendanceTabs();
+  setTimeout(() => loadDashboardAnalytics(), 500);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -239,60 +322,100 @@ function applyRoleUI() {
 function buildDropdowns() {
   function opts(arr) { return arr.map(v => `<option value="${v}">${v}</option>`).join(""); }
 
-  // Score arms: master/ST sees all arms (ST can enter scores in any class for their subject)
-  // FT sees only their class arms
+  // Arms available to this user
   const ftArms    = _isFT ? ALL_ARMS.filter(a => armToBase(a) === _ftClass) : [];
-  const scoreArms = _isMaster ? ALL_ARMS
-    : _isST ? ALL_ARMS           // subject teachers can select any class
-    : ftArms;                    // form teachers limited to their class
+  const scoreArms = _isMaster ? ALL_ARMS : _isST ? ALL_ARMS : ftArms;
   const scoreArmEl = $("scoreClassArm");
   if (scoreArmEl) {
-    scoreArmEl.innerHTML = scoreArms.length
-      ? opts(scoreArms)
-      : '<option value="">No classes assigned</option>';
+    scoreArmEl.innerHTML = scoreArms.length ? opts(scoreArms) : '<option value="">No classes assigned</option>';
     scoreArmEl.disabled = !_isMaster && scoreArms.length <= 1;
   }
 
-  // ── Broadsheet arms: FT sees their 2 arms; ST sees their arms; master sees all ──
-  // FIX #9 ROOT: form teacher correctly gets JS 1A AND JS 1B
+  // Broadsheet arms
   let bsSet = new Set();
   if (_isMaster) { ALL_ARMS.forEach(a => bsSet.add(a)); }
   else {
-    if (_isFT) { ALL_ARMS.filter(a => armToBase(a) === _ftClass).forEach(a => bsSet.add(a)); }
-    if (_isST) { _stArms.forEach(a => bsSet.add(a)); }
+    if (_isFT) ALL_ARMS.filter(a => armToBase(a) === _ftClass).forEach(a => bsSet.add(a));
+    if (_isST) _stArms.forEach(a => bsSet.add(a));
   }
-  const bsArms = ALL_ARMS.filter(a => bsSet.has(a));
+  const bsArms  = ALL_ARMS.filter(a => bsSet.has(a));
   const bsArmEl = $("bsClassArm");
   if (bsArmEl) {
     bsArmEl.innerHTML = bsArms.length ? opts(bsArms) : '<option value="">No classes available</option>';
     bsArmEl.disabled  = !_isMaster && bsArms.length <= 1;
   }
 
-  // ── Remark arms: form teacher's class only ─────────────────
-  const remArms = _isMaster ? ALL_ARMS
-    : _isFT ? ALL_ARMS.filter(a => armToBase(a) === _ftClass)
-    : [];
+  // Remarks arms
+  const remArms  = _isMaster ? ALL_ARMS : _isFT ? ALL_ARMS.filter(a => armToBase(a) === _ftClass) : [];
   const remArmEl = $("remarkClassArm");
   if (remArmEl) {
     remArmEl.innerHTML = remArms.length ? opts(remArms) : '<option value="">Not assigned</option>';
     remArmEl.disabled  = !_isMaster && remArms.length <= 1;
   }
 
-  // ── Subject management classes ─────────────────────────────
+  // Subject management classes
+  function groupedClassOpts(classes) {
+    const groups = [
+      { label:"Senior Secondary", list: SS_CLASSES },
+      { label:"Junior Secondary", list: JS_CLASSES },
+      { label:"Basic",            list: BASIC_CLASSES },
+      { label:"Nursery",          list: NURSERY_CLASSES },
+      { label:"Creche",           list: CRECHE_CLASSES }
+    ];
+    return groups.filter(g => g.list.some(c => classes.includes(c))).map(g =>
+      `<optgroup label="${g.label}">${g.list.filter(c => classes.includes(c)).map(c => `<option value="${c}">${c}</option>`).join("")}</optgroup>`
+    ).join("");
+  }
   const subClasses = _isMaster ? ALL_CLASSES : _isFT ? [_ftClass] : [];
-  const subClsEl = $("subjectClass");
+  const subClsEl   = $("subjectClass");
   if (subClsEl) {
-    subClsEl.innerHTML = subClasses.length ? opts(subClasses) : '<option value="">Not assigned</option>';
+    subClsEl.innerHTML = subClasses.length ? groupedClassOpts(subClasses) : '<option value="">Not assigned</option>';
     subClsEl.disabled  = !_isMaster && subClasses.length <= 1;
   }
 
+  // Attendance arms — FT only sees their class, admin sees all
+  const attArms  = _isMaster ? ALL_ARMS : _isFT ? ftArms : [];
+  const attArmEl = $("attClassArm");
+  if (attArmEl) {
+    attArmEl.innerHTML = attArms.length ? opts(attArms) : '<option value="">Not assigned</option>';
+    attArmEl.disabled  = !_isMaster && attArms.length <= 1;
+  }
+
+  // Analytics + per-student: admin sees all classes, FT only sees their own class
+  const analyticsClasses = _isMaster ? ALL_CLASSES : _isFT ? [_ftClass] : ALL_CLASSES;
+  ["analyticsClass","perStudentClass"].forEach(function(id) {
+    const el = $(id);
+    if (!el) return;
+    if (_isFT && !_isMaster) {
+      el.innerHTML = "<option value='" + _ftClass + "'>" + _ftClass + "</option>";
+      el.value     = _ftClass;
+      el.disabled  = true;
+    } else if (id === "analyticsClass") {
+      // Admin: populate only the individual class optgroup
+      const grp = $("analyticsClassGroup");
+      if (grp) grp.innerHTML = analyticsClasses.map(function(c){ return "<option value='" + c + "'>" + c + "</option>"; }).join("");
+      el.disabled = false;
+    } else {
+      el.innerHTML = groupedClassOpts(analyticsClasses);
+      el.disabled  = false;
+    }
+  });
+
+  // Student filter class
   $("stuFilterClass").innerHTML = '<option value="">All Classes</option>' + opts(ALL_CLASSES);
 
-  // FIX #1: After arms are populated, immediately refresh the subject dropdown
-  // Use setTimeout so DOM updates settle before the async Firestore call
-  if (scoreArms.length) {
-    setTimeout(() => refreshSubjectDropdown(), 200);
-  } else {
+  // Record Bank class — admin only, populate individual class optgroup
+  const rbGrp = $("rbClassGroup");
+  if (rbGrp) rbGrp.innerHTML = ALL_CLASSES.map(function(c){ return "<option value='" + c + "'>" + c + "</option>"; }).join("");
+
+  // Promotion dropdowns — admin only
+  const promFrom = $("promFromClass");
+  const promTo   = $("promToClass");
+  if (promFrom) promFrom.innerHTML = '<option value="">Select class...</option>' + groupedClassOpts(ALL_CLASSES);
+  if (promTo)   promTo.innerHTML   = '<option value="">Select class...</option>' + groupedClassOpts(ALL_CLASSES);
+
+  if (scoreArms.length) setTimeout(() => refreshSubjectDropdown(), 200);
+  else {
     const sel = $("scoreSubject");
     if (sel) sel.innerHTML = '<option value="">Select class arm first</option>';
   }
@@ -321,35 +444,108 @@ async function loadTeachers() {
 }
 
 // School identity state
-let _schoolName = "Recomella Academy";
-let _schoolLogo = "./logo.png";
+let _schoolName    = "SchoolNova";
+let _schoolLogo    = "./schoolNova.png";
+let _currentSession = "";  // always holds the active session
 
 async function loadSession() {
   try {
     const s = await getSession();
     const t = s.currentTerm || "1";
+    _currentSession = s.session || "";  // store globally
     $("statSession").textContent = s.session || "—";
     $("statTerm").textContent    = TERM_LABELS[t] || "—";
-    ["scoreTerm","subjectTerm","bsTerm","remarkTerm","approvalTerm","resetTerm"].forEach(id => {
+
+    // Sync term dropdowns across all sections
+    ["scoreTerm","subjectTerm","bsTerm","remarkTerm","approvalTerm",
+     "attTerm","analyticsTerm","perStudentTerm","rbTerm","resTerm"].forEach(id => {
       const el = $(id); if (el) el.value = t;
     });
+
+    // Sync session input in record bank
+    // rbSession is now a select dropdown — populated separately
+
     if (_isMaster) {
       $("sessionInput").value    = s.session || "";
       $("termInput").value       = t;
       $("schoolNameInput").value = s.schoolName || "";
+      if (s.termStartDate) { const el = $("termStartDate"); if(el) el.value = s.termStartDate; }
+      if (s.termEndDate)   { const el = $("termEndDate");   if(el) el.value = s.termEndDate; }
+      updateTermWeeksDisplay(s.termStartDate, s.termEndDate);
     }
     if (s.schoolName) {
       _schoolName = s.schoolName;
       const bn = $("brandName"); if (bn) bn.textContent = s.schoolName;
     }
+
+    // Current week of term — visible to all roles
+    const totalWeeks = countSchoolWeeks(s.termStartDate, s.termEndDate);
+    const cwEl = $("statCurrentWeek");
+    const twEl = $("statTotalWeeks");
+    if (cwEl) {
+      if (s.termStartDate) {
+        const today     = new Date();
+        const start     = new Date(s.termStartDate);
+        const diffDays  = Math.floor((today - start) / (1000*60*60*24));
+        const currentWk = diffDays >= 0 ? Math.min(Math.ceil((diffDays + 1) / 7), totalWeeks||99) : 0;
+        // Break "Week" and number onto separate lines
+        cwEl.innerHTML  = currentWk > 0
+          ? `<span style="font-size:.65rem;font-weight:700;display:block;color:#16a34a">WEEK</span><span style="font-size:1.6rem;font-weight:900;line-height:1;color:#16a34a">${currentWk}</span>`
+          : "—";
+        if (twEl) twEl.textContent = totalWeeks > 0 ? totalWeeks + " weeks this term" : "Set term dates in Settings";
+      } else {
+        cwEl.innerHTML = `<span style="font-size:.75rem;color:var(--text-muted)">Set term<br>dates</span>`;
+        if (twEl) twEl.textContent = "Set term dates in Settings";
+      }
+    }
   } catch(e) { console.error(e); }
 }
 
+// ── Calculate and display term weeks ────────────────────────────
+function countSchoolWeeks(startDate, endDate) {
+  if (!startDate || !endDate) return 0;
+  const s = new Date(startDate), e = new Date(endDate);
+  if (isNaN(s) || isNaN(e) || e <= s) return 0;
+  const days = Math.floor((e - s) / (1000 * 60 * 60 * 24)) + 1;
+  return Math.ceil(days / 7);
+}
+
+function updateTermWeeksDisplay(startDate, endDate) {
+  const weeks = countSchoolWeeks(startDate, endDate);
+  const info  = $("termWeeksInfo");
+  const text  = $("termWeeksText");
+  if (!info || !text) return;
+  if (weeks > 0) {
+    text.textContent = weeks + " weeks in this term (" + startDate + " to " + endDate + ")";
+    info.style.display = "block";
+  } else {
+    info.style.display = "none";
+  }
+}
+
+// Live update weeks display when dates change
+["termStartDate","termEndDate"].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener("change", () => {
+    const s = $("termStartDate")?.value;
+    const e = $("termEndDate")?.value;
+    updateTermWeeksDisplay(s, e);
+  });
+});
+
 async function loadStudents() {
   try {
-    _students = await getAllStudents();
+    // Load ALL students for alumni/inactive views
+    _students = await getActiveStudents();
+    const male   = _students.filter(s => s.gender === "Male").length;
+    const female = _students.filter(s => s.gender === "Female").length;
+    const classes = new Set(_students.map(s => s.classBase)).size;
     $("statStudents").textContent = _students.length;
+    const sm = $("statMale");   if (sm) sm.textContent = male;
+    const sf = $("statFemale"); if (sf) sf.textContent = female;
+    const sc = $("statClasses"); if (sc) sc.textContent = classes;
     renderStudentTable(_students);
+    if (_isMaster) loadDashboardAnalytics();
   } catch(e) { console.error("loadStudents:", e); }
 }
 
@@ -364,7 +560,7 @@ function renderStudentTable(list) {
     : _isST  ? list.filter(s => _stArms.includes(s.classArm))
     : [];
   if (!pool.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="padding:30px;color:var(--text-muted)">No students found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="padding:30px;color:var(--text-muted)">No students found.</td></tr>`;
     return;
   }
   tbody.innerHTML = pool.map(s => {
@@ -372,6 +568,12 @@ function renderStudentTable(list) {
     const soTag  = (!s.subjectsOffered || s.subjectsOffered === "all")
       ? `<span class="badge badge-success">All Subjects</span>`
       : `<span class="badge badge-info" title="${soArr.join(", ")}">${soArr.length} subject${soArr.length!==1?"s":""}</span>`;
+    const status  = s.status || "active";
+    const statusTag = status === "active"     ? `<span class="badge badge-success">Active</span>` :
+                      status === "graduated"   ? `<span class="badge" style="background:#7c3aed;color:#fff">Graduated</span>` :
+                      status === "transferred" ? `<span class="badge badge-warning">Transferred</span>` :
+                      status === "inactive"    ? `<span class="badge badge-muted">Inactive</span>` :
+                      `<span class="badge badge-success">Active</span>`;
     return `<tr>
       <td><strong>${s.regNumber}</strong></td>
       <td>${s.fullName||"—"}</td>
@@ -379,6 +581,7 @@ function renderStudentTable(list) {
       <td><span class="badge badge-primary">Arm ${s.arm||"—"}</span></td>
       <td>${s.gender||"—"}</td>
       <td>${soTag}</td>
+      <td>${statusTag}</td>
       <td><div class="action-btns">
         <button class="btn-icon btn-edit" onclick="editStudent('${s.regNumber}')"><i class="bi bi-pencil-fill"></i></button>
         ${_isMaster?`<button class="btn-icon btn-delete" onclick="confirmDeleteStudent('${s.regNumber}','${(s.fullName||s.regNumber).replace(/'/g,"\\'")}')"><i class="bi bi-trash-fill"></i></button>`:""}
@@ -408,7 +611,7 @@ async function loadSubjectCheckboxes(classBase, selected) {
   wrap.innerHTML = `<p style="color:var(--text-muted);font-size:.8rem">Loading subjects…</p>`;
   let subjects = [];
   for (const t of ["1","2","3"]) {
-    subjects = await getClassSubjects(classBase, t);
+    subjects = await getClassSubjects(classBase, t, _currentSession);
     if (subjects.length) break;
   }
   if (!subjects.length) {
@@ -458,11 +661,15 @@ $("addStudentBtn").addEventListener("click", () => {
   $("studentModalTitle").textContent = "Add Student";
   $("studentEditId").value = "";
   $("sRegNumber").value = ""; $("sFullName").value = ""; $("sGender").value = "";
+  const ppEl = $("sParentPhone"); if (ppEl) ppEl.value = "";
+  const paEl = $("sParentAddr");  if (paEl) paEl.value = "";
   $("sAllSubjects").checked = true;
   $("specificSubjectsWrap").style.display = "none";
   $("subjectCheckboxes").innerHTML = "";
   $("sRegNumber").disabled = false;
   $("sArm").disabled = false;
+  // Hide Transfer button for new students
+  const tBtn = $("transferStudentBtn"); if (tBtn) tBtn.style.display = "none";
   // FIX #6: Admin has full access; form teacher locked to their class
   if (_isMaster) {
     $("sClass").value = ""; $("sClass").disabled = false;
@@ -488,15 +695,24 @@ $("saveStudentBtn").addEventListener("click", async () => {
   }
 
   // Normalize classArm: always "JS 1A" format (no extra space before arm letter)
-  const classArm = `${cls}${arm}`;  // e.g. "JS 1" + "A" = "JS 1A"
-  const data = { regNumber: reg, fullName: name, classBase: cls, arm, classArm, gender, subjectsOffered };
+  const classArm     = `${cls}${arm}`;
+  const parentPhone  = $("sParentPhone")?.value.trim() || "";
+  const parentAddr   = $("sParentAddr")?.value.trim()  || "";
+  const data = { regNumber: reg, fullName: name, classBase: cls, arm, classArm, gender, subjectsOffered, parentPhone, parentAddr };
   const btn = $("saveStudentBtn"); btn.disabled = true; btn.textContent = "Saving…";
   try {
     if (editId) {
       if (_isMaster && reg !== editId) {
-        // RegNumber changed — delete old doc, create new one
-        await changeStudentReg(editId, reg, data);
-        toast("Student updated with new reg number.", "success");
+        // RegNumber changed — migrate all related data to new reg number
+        const btn2 = $("saveStudentBtn"); btn2.textContent = "Migrating data…";
+        const result = await changeStudentReg(editId, reg, data);
+        toast(
+          "Reg number updated. Migrated: " +
+          result.scores + " score(s), " +
+          result.remarks + " remark(s), " +
+          result.attendance + " attendance record(s).",
+          "success"
+        );
       } else {
         await updateStudent(editId, data);
         toast("Student updated.", "success");
@@ -521,10 +737,14 @@ window.editStudent = async function(reg) {
   $("sClass").value        = s.classBase || "";
   $("sArm").value          = s.arm       || "A";
   $("sGender").value       = s.gender    || "";
-  // Admin — all fields open including regNumber. Form teacher — locked
+  const ppEl = $("sParentPhone"); if (ppEl) ppEl.value = s.parentPhone || "";
+  const paEl = $("sParentAddr");  if (paEl) paEl.value = s.parentAddr  || "";
   $("sRegNumber").disabled = !_isMaster;
   $("sClass").disabled     = !_isMaster;
   $("sArm").disabled       = !_isMaster;
+  // Show Transfer button for Admin only when editing existing student
+  const tBtn = $("transferStudentBtn");
+  if (tBtn) tBtn.style.display = _isMaster ? "inline-flex" : "none";
 
   const isAll = !s.subjectsOffered || s.subjectsOffered === "all";
   $("sAllSubjects").checked = isAll;
@@ -537,36 +757,115 @@ window.editStudent = async function(reg) {
 
 let _delReg = null;
 window.confirmDeleteStudent = function(reg, name) {
-  $("confirmMsg").textContent = `Delete "${name}"? This cannot be undone.`;
+  $("confirmMsg").textContent = `Remove "${name}" from active students? Their records (scores, attendance, remarks) are preserved and can be restored anytime.`;
   _delReg = reg;
   openModal("confirmModal");
 };
+
+// Transfer Out handler
+$("transferStudentBtn")?.addEventListener("click", async () => {
+  const reg = $("studentEditId").value;
+  if (!reg) return;
+  const s = _students.find(x => x.regNumber === reg);
+  const name = s ? s.fullName : reg;
+  if (!confirm(`Mark "${name}" as Transferred Out?\n\nThey will leave the active student list.\nAll their records (scores, attendance, results) are permanently preserved.\n\nContinue?`)) return;
+  try {
+    await transferStudent(reg, _currentSession);
+    toast(name + " marked as transferred. All records preserved.", "info");
+    closeModal("studentModal");
+    await loadStudents();
+  } catch(e) { toast(e.message, "error"); }
+});
 $("confirmDeleteBtn").addEventListener("click", async () => {
   if (!_delReg) return;
-  const btn = $("confirmDeleteBtn"); btn.disabled = true; btn.textContent = "Deleting…";
+  const btn = $("confirmDeleteBtn"); btn.disabled = true; btn.textContent = "Removing…";
   try {
     await deleteStudent(_delReg);
-    toast("Student deleted.", "info");
+    toast("Student removed. All records preserved and can be restored.", "info");
     closeModal("confirmModal");
     await loadStudents();
   } catch(e) { toast(e.message, "error"); }
   finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-trash"></i> Delete'; _delReg = null; }
 });
 
+
 // ══════════════════════════════════════════════════════════════
 //  SUBJECTS
 // ══════════════════════════════════════════════════════════════
-let _classSubjects = [];
+let _classSubjects    = [];
+let _copySubjectsSrc  = null; // { term, session, subjects } — source for copy
+
+// Search previous terms/sessions for subjects to copy from
+async function findPreviousSubjects(cls, currentTerm, currentSession) {
+  // Search order: previous terms in current session, then previous session all terms
+  var termOrder = ["3","2","1"];
+  var prevTerms = termOrder.filter(function(t){ return t !== currentTerm; });
+
+  // 1. Try previous terms in current session
+  for (var i = 0; i < prevTerms.length; i++) {
+    var subs = await getClassSubjects(cls, prevTerms[i], currentSession);
+    if (subs.length) return { term: prevTerms[i], session: currentSession, subjects: subs };
+  }
+
+  // 2. Try all terms in previous session (guess previous session year)
+  if (currentSession) {
+    var parts = currentSession.split("/");
+    if (parts.length === 2) {
+      var y1 = parseInt(parts[0]) - 1;
+      var y2 = parseInt(parts[1]) - 1;
+      var prevSession = y1 + "/" + y2;
+      for (var j = 0; j < termOrder.length; j++) {
+        var prevSubs = await getClassSubjects(cls, termOrder[j], prevSession);
+        if (prevSubs.length) return { term: termOrder[j], session: prevSession, subjects: prevSubs };
+      }
+    }
+  }
+
+  // 3. Try old untagged docs (no session)
+  for (var k = 0; k < termOrder.length; k++) {
+    var oldSubs = await getClassSubjects(cls, termOrder[k], "");
+    if (oldSubs.length) return { term: termOrder[k], session: "previous session", subjects: oldSubs };
+  }
+
+  return null;
+}
 
 $("loadSubjectsBtn").addEventListener("click", async () => {
   const cls  = $("subjectClass").value;
   const term = $("subjectTerm").value;
   if (!cls) { toast("Select a class.", "error"); return; }
+  const notice = $("copySubjectsNotice");
+  notice.style.display = "none";
+  _copySubjectsSrc = null;
   try {
-    _classSubjects = await getClassSubjects(cls, term);
-    renderChips();
-    toast(`${_classSubjects.length} subject(s) loaded for ${cls} — ${TERM_LABELS[term]}.`, "success");
+    _classSubjects = await getClassSubjects(cls, term, _currentSession);
+    if (_classSubjects.length) {
+      renderChips();
+      toast(`${_classSubjects.length} subject(s) loaded for ${cls} — ${TERM_LABELS[term]}.`, "success");
+    } else {
+      // Subjects empty — search for previous subjects to copy
+      renderChips();
+      const src = await findPreviousSubjects(cls, term, _currentSession);
+      if (src) {
+        _copySubjectsSrc = src;
+        $("copySubjectsFrom").textContent =
+          "Found " + src.subjects.length + " subject(s) from " +
+          TERM_LABELS[src.term] + " — " + src.session + ". Copy them as a starting point?";
+        notice.style.display = "block";
+        toast("No subjects yet for this term. You can copy from a previous term.", "info");
+      } else {
+        toast("No subjects found. Add subjects below.", "info");
+      }
+    }
   } catch(e) { toast(e.message, "error"); }
+});
+
+$("copySubjectsBtn")?.addEventListener("click", () => {
+  if (!_copySubjectsSrc) return;
+  _classSubjects = _copySubjectsSrc.subjects.slice(); // copy array
+  renderChips();
+  $("copySubjectsNotice").style.display = "none";
+  toast(_classSubjects.length + " subject(s) copied. Edit if needed then save.", "success");
 });
 
 function renderChips() {
@@ -600,7 +899,7 @@ $("saveSubjectsBtn").addEventListener("click", async () => {
   if (!_classSubjects.length) { toast("Add at least one subject.", "error"); return; }
   const btn = $("saveSubjectsBtn"); btn.disabled = true; btn.textContent = "Saving…";
   try {
-    await saveClassSubjects(cls, term, _classSubjects);
+    await saveClassSubjects(cls, term, _classSubjects, _currentSession);
     toast(`Subjects saved for ${cls} — ${TERM_LABELS[term]}.`, "success");
   } catch(e) { toast(e.message, "error"); }
   finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save"></i> Save Subjects'; }
@@ -620,7 +919,7 @@ async function refreshSubjectDropdown() {
   const sel = $("scoreSubject");
   sel.innerHTML = '<option value="">Loading…</option>';
   try {
-    let subs = await getClassSubjects(classBase, term);
+    let subs = await getClassSubjects(classBase, term, _currentSession);
     // Only pure subject teachers (not form teachers) get subject filtering
     if (_isST && !_isMaster && !_isFT) subs = subs.filter(s => _stSubjects.includes(s));
     sel.innerHTML = subs.length
@@ -677,10 +976,29 @@ $("loadScoresBtn").addEventListener("click", async () => {
       return offAll || (Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(subject));
     }).sort((a, b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
 
-    // Load existing saved scores
+    // Load existing saved scores — no session filter so old scores still appear
     const saved = await getScoresByClassArmSubjectTerm(classArm, subject, term);
     _scoreData = {};
-    saved.forEach(sc => { _scoreData[sc.regNumber] = sc; });
+
+    // Silently tag old scores (no session field) with current session
+    // Creates new doc with session in ID, then deletes the old untagged doc
+    // This ensures old scores belong to current session and won't bleed into future sessions
+    const untagged = saved.filter(sc => !sc.session && _currentSession);
+    if (untagged.length && _currentSession) {
+      Promise.all(untagged.map(async function(sc) {
+        // 1. Save new doc with session tagged
+        await saveScore(Object.assign({}, sc, { session: _currentSession }));
+        // 2. Delete old doc (no session in ID) so it never bleeds into future sessions
+        if (sc.id) await deleteScoreById(sc.id);
+      })).catch(function(e) { console.warn("Session tagging failed:", e); });
+    }
+
+    // Include scores: matching current session OR still-untagged old ones
+    saved.forEach(sc => {
+      if (!sc.session || sc.session === _currentSession) {
+        _scoreData[sc.regNumber] = sc;
+      }
+    });
 
     renderScoreTable(classArm, subject, term);
     $("scoresCardTitle").innerHTML =
@@ -770,13 +1088,15 @@ $("saveScoresBtn").addEventListener("click", async () => {
   if (!classArm || !term || !subject || !_scoreStudents.length) {
     toast("Load students first before saving.", "error"); return;
   }
+  const sessionData = await getSession();
+  const session     = sessionData.session || "";
   const btn = $("saveScoresBtn"); btn.disabled = true; btn.textContent = "Uploading…";
   try {
     await Promise.all(_scoreStudents.map(s => {
       const t1 = Math.min(Math.max(parseInt($(`t1_${s.regNumber}`)?.value)||0, 0), 20);
       const t2 = Math.min(Math.max(parseInt($(`t2_${s.regNumber}`)?.value)||0, 0), 20);
       const ex = Math.min(Math.max(parseInt($(`ex_${s.regNumber}`)?.value)||0, 0), 60);
-      return saveScore({ regNumber:s.regNumber, fullName:s.fullName, classArm, classBase, subject, term:String(term), test1:t1, test2:t2, exam:ex });
+      return saveScore({ regNumber:s.regNumber, fullName:s.fullName, classArm, classBase, subject, term:String(term), session, test1:t1, test2:t2, exam:ex });
     }));
     toast(`Scores uploaded — ${subject} / ${classArm} / ${TERM_LABELS[term]}.`, "success");
   } catch(e) { toast(e.message, "error"); }
@@ -797,11 +1117,13 @@ $("loadBroadsheetBtn").addEventListener("click", async () => {
 
   const btn = $("loadBroadsheetBtn"); btn.disabled = true; btn.textContent = "Building…";
   try {
-    const [students, allScores, subjects] = await Promise.all([
+    const [students, allScoresRaw, subjects] = await Promise.all([
       getStudentsByClassArm(classArm),
       getScoresByClassArmTerm(classArm, term),
-      getClassSubjects(classBase, term)
+      getClassSubjects(classBase, term, _currentSession)
     ]);
+    // Include scores matching current session OR old untagged scores
+    const allScores = allScoresRaw.filter(sc => !sc.session || sc.session === _currentSession);
     if (!students.length) { toast("No students found in this class arm.", "warning"); return; }
     if (!subjects.length) { toast("No subjects set up for this class/term yet.", "warning"); return; }
     renderBroadsheet(classArm, term, students, allScores, subjects);
@@ -939,12 +1261,13 @@ $("downloadExcelBtn").addEventListener("click", async function() {
     var results    = await Promise.all([
       getStudentsByClassArm(classArm),
       getScoresByClassArmTerm(classArm, term),
-      getClassSubjects(classBase, term),
+      getClassSubjects(classBase, term, _currentSession),
       getSession()
     ]);
-    var students   = results[0];
-    var allScores  = results[1];
-    var subjects   = results[2];
+    var students    = results[0];
+    var allScoresRaw = results[1];
+    var allScores   = allScoresRaw.filter(function(sc){ return !sc.session || sc.session === _currentSession; });
+    var subjects    = results[2];
     var sessionData = results[3];
 
     if (!students.length)  { toast("No students found.", "error"); return; }
@@ -1099,7 +1422,7 @@ $("loadRemarksBtn").addEventListener("click", async () => {
   try {
     _remStudents = (await getStudentsByClassArm(classArm))
       .sort((a,b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
-    const existing = await getRemarksByClassArmTerm(classArm, term);
+    const existing = await getRemarksByClassArmTerm(classArm, term, _currentSession);
     const remMap   = {};
     existing.forEach(r => { remMap[r.regNumber] = r.remark; });
 
@@ -1127,7 +1450,7 @@ $("saveRemarksBtn").addEventListener("click", async () => {
   try {
     await Promise.all(_remStudents.map(s => {
       const remark = $(`rem_${s.regNumber}`)?.value.trim() || "";
-      return saveRemark(s.regNumber, classArm, classBase, term, remark);
+      return saveRemark(s.regNumber, classArm, classBase, term, remark, _currentSession);
     }));
     toast("All remarks saved.", "success");
   } catch(e) { toast(e.message, "error"); }
@@ -1141,7 +1464,7 @@ $("loadApprovalsBtn").addEventListener("click", async () => {
   const term = $("approvalTerm").value;
   const btn  = $("loadApprovalsBtn"); btn.disabled = true; btn.textContent = "Loading…";
   try {
-    const list = await getAllApprovals();
+    const list = await getAllApprovals(_currentSession);
     const map  = {};
     list.filter(a => a.term === String(term)).forEach(a => { map[a.classArm] = a.approved; });
     $("approvalsGrid").innerHTML = ALL_ARMS.map(arm => {
@@ -1164,8 +1487,8 @@ $("loadApprovalsBtn").addEventListener("click", async () => {
 
 window.handleApproval = async function(classArm, term, approve) {
   try {
-    if (approve) { await approveResults(classArm, term); toast(`${classArm} approved — students can now view results.`, "success"); }
-    else         { await revokeApproval(classArm, term);  toast(`${classArm} approval revoked.`, "info"); }
+    if (approve) { await approveResults(classArm, term, _currentSession); toast(`${classArm} approved — students can now view results.`, "success"); }
+    else         { await revokeApproval(classArm, term, _currentSession);  toast(`${classArm} approval revoked.`, "info"); }
     $("loadApprovalsBtn").click();
   } catch(e) { toast(e.message, "error"); }
 };
@@ -1173,28 +1496,28 @@ window.handleApproval = async function(classArm, term, approve) {
 // ══════════════════════════════════════════════════════════════
 //  TEACHER MANAGEMENT — Master Admin only
 // ══════════════════════════════════════════════════════════════
-const JS_ARMS  = ["JS 1A","JS 1B","JS 2A","JS 2B","JS 3A","JS 3B"];
-const SS_ARMS  = ["SS 1A","SS 1B","SS 2A","SS 2B","SS 3A","SS 3B"];
-
-function sectionToArms(section, customArms) {
-  if (section === "JS")     return JS_ARMS;
-  if (section === "SS")     return SS_ARMS;
-  if (section === "ALL")    return ALL_ARMS;
-  if (section === "CUSTOM") return customArms.split(",").map(s => s.trim()).filter(Boolean);
-  return [];
+function sectionToArms(section) {
+  if (section === "JS")      return [...JS_ARMS_C];
+  if (section === "SS")      return [...SS_ARMS];
+  if (section === "BASIC")   return [...BASIC_ARMS];
+  if (section === "NURSERY") return [...NURSERY_ARMS];
+  if (section === "CRECHE")  return [...CRECHE_ARMS];
+  return [...ALL_ARMS];
 }
 
-function sectionLabel(section, classArms) {
-  if (section === "JS")  return "JS Section (all arms)";
-  if (section === "SS")  return "SS Section (all arms)";
-  if (section === "ALL") return "All Sections";
-  return classArms.join(", ");
+function sectionLabel(section) {
+  if (section === "JS")      return "Junior Secondary (JS)";
+  if (section === "SS")      return "Senior Secondary (SS)";
+  if (section === "BASIC")   return "Basic (1–5)";
+  if (section === "NURSERY") return "Nursery (1–3)";
+  if (section === "CRECHE")  return "Creche";
+  if (section === "ALL")     return "All Sections";
+  return section || "—";
 }
 
 function renderTeacherRows() {
-  if (!_isMaster) return; // Only master admin sees settings — bail silently for teachers
+  if (!_isMaster) return;
 
-  // Form teachers
   const ftBody = $("ftTeacherBody");
   if (ftBody) {
     const entries = Object.entries(FORM_TEACHERS);
@@ -1210,14 +1533,13 @@ function renderTeacherRows() {
       </tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:12px">No form teachers added yet.</td></tr>`;
   }
 
-  // Subject teachers
   const stBody = $("stTeacherBody");
   if (stBody) {
     const entries = Object.entries(SUBJECT_TEACHERS);
     stBody.innerHTML = entries.length ? entries.map(([email, cfg], i) => `
       <tr>
         <td style="font-size:.82rem;font-weight:700">${email}</td>
-        <td style="font-size:.82rem">${cfg.section === "JS" ? "Junior (JS)" : cfg.section === "SS" ? "Senior (SS)" : "Both (JS & SS)"}</td>
+        <td style="font-size:.82rem">${sectionLabel(cfg.section)}</td>
         <td style="font-size:.82rem">${(cfg.subjects||[]).join(", ") || "—"}</td>
         <td><button class="btn btn-danger btn-sm" onclick="removeST(${i})"><i class="bi bi-trash"></i></button></td>
       </tr>`).join("") : `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:12px">No subject teachers added yet.</td></tr>`;
@@ -1272,10 +1594,8 @@ window.addSTRow = function() {
   if (!section)        { toast("Select a section.", "error"); return; }
   if (!checked.length) { toast("Select at least one subject.", "error"); return; }
 
-  // Expand arms immediately at save time — no runtime expansion needed
-  const arms = section === "JS"  ? [...JS_ARMS]
-             : section === "SS"  ? [...SS_ARMS]
-             : [...ALL_ARMS]; // ALL
+  // Expand arms at save time using the updated sectionToArms
+  const arms = sectionToArms(section);
 
   SUBJECT_TEACHERS[email] = { subjects: checked, classArms: arms, section };
   $("newSTEmail").value    = "";
@@ -1337,15 +1657,26 @@ $("saveSchoolBtn")?.addEventListener("click", async () => {
 });
 
 $("saveSessionBtn")?.addEventListener("click", async () => {
-  const session = $("sessionInput").value.trim();
-  const term    = $("termInput").value;
+  const session   = $("sessionInput").value.trim();
+  const term      = $("termInput").value;
+  const startDate = $("termStartDate")?.value || "";
+  const endDate   = $("termEndDate")?.value   || "";
   if (!session) { toast("Enter a session.", "error"); return; }
-  const btn = $("saveSessionBtn"); btn.disabled = true; btn.textContent = "Saving…";
+  const btn = $("saveSessionBtn"); btn.disabled = true; btn.textContent = "Saving...";
   try {
-    await saveSession(session, term, _schoolName, _schoolLogo);
+    // Tag all old untagged scores with the CURRENT active session
+    // before switching to the new session/term
+    // This prevents old scores from bleeding into the new session
+    if (_currentSession) {
+      const { tagged } = await tagAllUntaggedScores(_currentSession);
+      if (tagged > 0) console.log("Tagged " + tagged + " old score(s) with session " + _currentSession);
+    }
+    await saveSession(session, term, _schoolName, _schoolLogo, startDate, endDate);
+    _currentSession = session; // update global
     toast("Session saved.", "success");
     $("statSession").textContent = session;
     $("statTerm").textContent    = TERM_LABELS[term];
+    updateTermWeeksDisplay(startDate, endDate);
   } catch(e) { toast(e.message, "error"); }
   finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save"></i> Save Session'; }
 });
@@ -1374,20 +1705,1942 @@ $("fixClassArmBtn")?.addEventListener("click", async () => {
 });
 
 // ══════════════════════════════════════════════════════════════
-//  TERM RESET — Master Admin only
+//  ATTENDANCE — Tabs
 // ══════════════════════════════════════════════════════════════
-$("openResetBtn").addEventListener("click", () => openModal("resetModal"));
+document.querySelectorAll(".att-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll(".att-tab").forEach(b => b.classList.remove("active","btn-primary"));
+    document.querySelectorAll(".att-tab-content").forEach(c => c.style.display = "none");
+    btn.classList.add("active","btn-primary");
+    const tabEl = $(tab); if (tabEl) tabEl.style.display = "block";
+  });
+});
 
-$("confirmResetBtn").addEventListener("click", async () => {
-  if (!_isMaster) { toast("Only the Master Admin can reset term data.", "error"); return; }
-  if ($("resetConfirmInput").value.trim() !== "RESET") { toast('Type "RESET" to confirm.', "error"); return; }
-  const term = $("resetTerm").value;
-  const btn  = $("confirmResetBtn"); btn.disabled = true; btn.textContent = "Resetting…";
+// ── Show analytics/per-student tabs for form teachers and admin ──
+function applyAttendanceTabs() {
+  const analyticsTab  = $("attTabAnalytics");
+  const studentTab    = $("attTabStudent");
+  if (analyticsTab) analyticsTab.style.display = (_isMaster || _isFT) ? "" : "none";
+  if (studentTab)   studentTab.style.display   = (_isMaster || _isFT) ? "" : "none";
+
+  // For FT: clicking Analytics auto-triggers generate with their class pre-filled
+  if (_isFT && !_isMaster) {
+    if (analyticsTab) analyticsTab.onclick = function() {
+      // switch tab visually
+      document.querySelectorAll(".att-tab").forEach(function(b){ b.classList.remove("active","btn-primary"); });
+      document.querySelectorAll(".att-tab-content").forEach(function(c){ c.style.display="none"; });
+      analyticsTab.classList.add("active","btn-primary");
+      const tabEl = $("att-analytics"); if (tabEl) tabEl.style.display = "block";
+      // auto-generate with FT class
+      const clsEl = $("analyticsClass");
+      if (clsEl) clsEl.value = _ftClass;
+      $("generateAnalyticsBtn")?.click();
+    };
+    if (studentTab) studentTab.onclick = function() {
+      document.querySelectorAll(".att-tab").forEach(function(b){ b.classList.remove("active","btn-primary"); });
+      document.querySelectorAll(".att-tab-content").forEach(function(c){ c.style.display="none"; });
+      studentTab.classList.add("active","btn-primary");
+      const tabEl = $("att-student"); if (tabEl) tabEl.style.display = "block";
+      // auto-load with FT class
+      const clsEl = $("perStudentClass");
+      if (clsEl) clsEl.value = _ftClass;
+      $("loadPerStudentBtn")?.click();
+    };
+  }
+}
+
+// ── Set today's date on load ──────────────────────────────────
+const attDateEl = $("attDate");
+if (attDateEl) attDateEl.value = new Date().toISOString().split("T")[0];
+
+// ── Helpers ───────────────────────────────────────────────────
+function getWeekNumber(dateStr) {
+  // Returns ISO week number
+  const d = new Date(dateStr);
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const w = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - w) / 86400000 - 3 + (w.getDay() + 6) % 7) / 7);
+}
+
+function getDayName(dateStr) {
+  return new Date(dateStr).toLocaleDateString("en-NG", { weekday: "short" });
+}
+
+function isWeekend(dateStr) {
+  const d = new Date(dateStr).getDay();
+  return d === 0 || d === 6;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  LOAD ATTENDANCE — Daily Entry
+// ══════════════════════════════════════════════════════════════
+let _attStudents = [];
+
+$("loadAttBtn")?.addEventListener("click", async () => {
+  const classArm = $("attClassArm").value;
+  const term     = $("attTerm").value;
+  const date     = $("attDate").value;
+  if (!classArm) { toast("Select a class arm.", "error"); return; }
+  if (!date)     { toast("Select a date.", "error"); return; }
+
+  // Role check
+  if (_isFT && !_isMaster && armToBase(classArm) !== _ftClass) {
+    toast("You can only take attendance for your own class.", "error"); return;
+  }
+
+  // Weekend check
+  if (isWeekend(date)) { toast("Attendance is only recorded Mon–Fri.", "warning"); return; }
+
+  const btn = $("loadAttBtn"); btn.disabled = true; btn.textContent = "Loading...";
   try {
-    await resetTermData(term);
-    toast(`${TERM_LABELS[term]} cleared — all scores, remarks & approvals removed.`, "info");
-    closeModal("resetModal");
-    $("resetConfirmInput").value = "";
+    const sessionData = await getSession();
+    const session     = sessionData.session || "";
+    const holidays    = await getHolidays(session, term);
+    const isHoliday   = holidays.some(h => h.date === date);
+
+    _attStudents = (await getStudentsByClassArm(classArm))
+      .sort((a,b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
+
+    // Load existing records for this date
+    const existing = await getAttendanceByClassDate(classArm, date);
+    const attMap   = {};
+    existing.forEach(r => { attMap[r.regNumber] = r; });
+
+    const dayName = new Date(date).toLocaleDateString("en-NG", { weekday:"long", day:"2-digit", month:"short", year:"numeric" });
+    $("attEntryTitle").innerHTML = `<i class="bi bi-list-check"></i> ${classArm} — ${dayName}`;
+    $("attHolidayBadge").style.display = isHoliday ? "flex" : "none";
+    $("attEntryCard").style.display = "block";
+
+    if (isHoliday) {
+      $("attEntryTable").innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted)">
+        <i class="bi bi-calendar-x" style="font-size:1.5rem;display:block;margin-bottom:8px"></i>
+        This date is marked as a <strong>Holiday</strong>. No attendance can be taken.
+      </td></tr>`;
+      $("saveAttBtn").style.display = "none";
+      return;
+    }
+
+    $("saveAttBtn").style.display = "inline-flex";
+
+    if (!_attStudents.length) {
+      $("attEntryTable").innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted)">No students found in ${classArm}.</td></tr>`;
+      return;
+    }
+
+    $("attEntryTable").innerHTML = _attStudents.map(s => {
+      const rec = attMap[s.regNumber] || {};
+      const am  = rec.morning   !== undefined ? rec.morning   : 1;
+      const pm  = rec.afternoon !== undefined ? rec.afternoon : 1;
+      const tot = am + pm;
+      const status = rec.status || (tot === 2 ? "Present" : tot === 0 ? "Absent" : "Late");
+      return `<tr>
+        <td><strong>${s.regNumber}</strong></td>
+        <td style="font-weight:700;min-width:140px">${s.fullName||"—"}</td>
+        <td><span class="badge ${s.gender==="Female"?"badge-pink":"badge-blue"}" style="font-size:.7rem">${s.gender||"—"}</span></td>
+        <td style="text-align:center">
+          <select class="form-select form-select-sm att-am" id="am_${s.regNumber}" style="width:72px;margin:auto" onchange="calcAttTotal('${s.regNumber}')">
+            <option value="1" ${am===1?"selected":""}>1</option>
+            <option value="0" ${am===0?"selected":""}>0</option>
+          </select>
+        </td>
+        <td style="text-align:center">
+          <select class="form-select form-select-sm att-pm" id="pm_${s.regNumber}" style="width:72px;margin:auto" onchange="calcAttTotal('${s.regNumber}')">
+            <option value="1" ${pm===1?"selected":""}>1</option>
+            <option value="0" ${pm===0?"selected":""}>0</option>
+          </select>
+        </td>
+        <td style="text-align:center;font-weight:800" id="att-tot_${s.regNumber}">${tot}</td>
+        <td style="text-align:center">
+          <select class="form-select form-select-sm att-status" id="att-status_${s.regNumber}" style="width:90px;margin:auto" onchange="calcAttTotal('${s.regNumber}')">
+            <option ${status==="Present"?"selected":""}>Present</option>
+            <option ${status==="Absent"?"selected":""}>Absent</option>
+            <option ${status==="Late"?"selected":""}>Late</option>
+            <option ${status==="Holiday"?"selected":""}>Holiday</option>
+          </select>
+        </td>
+        <td><input type="text" class="form-control form-control-sm att-remark" id="att-rem_${s.regNumber}" value="${rec.remark||""}" placeholder="Optional"/></td>
+      </tr>`;
+    }).join("");
+
+    // Daily History
+    loadAttHistory(classArm, term, session);
+
+  } catch(e) { toast(e.message, "error"); console.error(e); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-search"></i> Load'; }
+});
+
+window.calcAttTotal = function(reg) {
+  const statusEl = $("att-status_"+reg);
+  const status   = statusEl ? statusEl.value : "";
+  const amEl = $("am_"+reg);
+  const pmEl = $("pm_"+reg);
+
+  // If this student is set to Holiday — mark ALL students as Holiday
+  if (status === "Holiday") {
+    _attStudents.forEach(function(s) {
+      const sSt = $("att-status_"+s.regNumber);
+      const sAm = $("am_"+s.regNumber);
+      const sPm = $("pm_"+s.regNumber);
+      const sTo = $("att-tot_"+s.regNumber);
+      if (sSt) sSt.value = "Holiday";
+      if (sAm) sAm.value = 0;
+      if (sPm) sPm.value = 0;
+      if (sTo) sTo.textContent = "H";
+    });
+    return;
+  }
+
+  // Normal calculation for non-Holiday
+  if (amEl) { /* keep value */ }
+  if (pmEl) { /* keep value */ }
+  const am  = parseInt(amEl?.value)||0;
+  const pm  = parseInt(pmEl?.value)||0;
+  const tot = am + pm;
+  const el  = $("att-tot_"+reg);
+  if (el) el.textContent = tot;
+  if (statusEl) statusEl.value = tot === 2 ? "Present" : tot === 0 ? "Absent" : "Late";
+};
+
+async function loadAttHistory(classArm, term, session) {
+  try {
+    const recs = await getAttendanceByClassTerm(classArm, term, session);
+    const byDate = {};
+    recs.forEach(r => {
+      if (!byDate[r.date]) byDate[r.date] = { present:0, absent:0, late:0 };
+      if (r.status === "Present") byDate[r.date].present++;
+      else if (r.status === "Absent") byDate[r.date].absent++;
+      else if (r.status === "Late") byDate[r.date].late++;
+    });
+    const dates = Object.keys(byDate).sort().reverse().slice(0,10);
+    if (!dates.length) { $("attHistoryCard").style.display = "none"; return; }
+    $("attHistoryCard").style.display = "block";
+    $("attHistoryBody").innerHTML = dates.map(d => {
+      const info = byDate[d];
+      const label = new Date(d).toLocaleDateString("en-NG", { weekday:"short", day:"2-digit", month:"short" });
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;color:var(--text-dark)">${label}</span>
+        <span style="font-size:.8rem">
+          <span style="color:#10b981;font-weight:700">P${info.present}</span>
+          <span style="color:#ef4444;font-weight:700;margin:0 6px">A${info.absent}</span>
+          <span style="color:#f59e0b;font-weight:700">L${info.late}</span>
+        </span>
+      </div>`;
+    }).join("");
+  } catch(e) { console.error("loadAttHistory:", e); }
+}
+
+// ── Save Attendance ───────────────────────────────────────────
+$("saveAttBtn")?.addEventListener("click", async () => {
+  const classArm = $("attClassArm").value;
+  const term     = $("attTerm").value;
+  const date     = $("attDate").value;
+  if (!_attStudents.length) { toast("Load students first.", "error"); return; }
+
+  const sessionData = await getSession();
+  const session     = sessionData.session || "";
+  const week        = getWeekNumber(date);
+  const btn         = $("saveAttBtn"); btn.disabled = true; btn.textContent = "Saving...";
+
+  try {
+    await Promise.all(_attStudents.map(s => {
+      const am     = parseInt($("am_"+s.regNumber)?.value)||0;
+      const pm     = parseInt($("pm_"+s.regNumber)?.value)||0;
+      const status = $("att-status_"+s.regNumber)?.value || "Present";
+      const remark = $("att-rem_"+s.regNumber)?.value.trim() || "";
+      return saveAttendance({
+        regNumber: s.regNumber,
+        fullName:  s.fullName,
+        gender:    s.gender,
+        classArm,
+        classBase: armToBase(classArm),
+        date, term: String(term), session, week: String(week),
+        morning: am, afternoon: pm, total: am+pm,
+        status, remark
+      });
+    }));
+    toast("Attendance saved successfully.", "success");
+    loadAttHistory(classArm, term, session);
   } catch(e) { toast(e.message, "error"); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-trash3-fill"></i> Reset Term Data'; }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-cloud-upload-fill"></i> Save Attendance'; }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  ANALYTICS — Admin only
+// ══════════════════════════════════════════════════════════════
+$("generateAnalyticsBtn")?.addEventListener("click", async () => {
+  const classBase = $("analyticsClass").value;
+  const term      = $("analyticsTerm").value;
+  if (!classBase) { toast("Select a class or section.", "error"); return; }
+  const btn = $("generateAnalyticsBtn"); btn.disabled = true; btn.textContent = "Generating...";
+
+  // Detect section-wide options
+  const isSectionView = classBase === "__ALL__" || classBase === "__SECONDARY__" || classBase === "__BASIC_NURSERY_CRECHE__";
+
+  // Hide/show appropriate result sections
+  const sectionSummaryEl = $("sectionSummaryResult");
+  const analyticsResultEl = $("analyticsResult");
+  if (sectionSummaryEl) sectionSummaryEl.style.display = "none";
+  if (analyticsResultEl) analyticsResultEl.style.display = "none";
+
+  try {
+    const sessionData = await getSession();
+    const session     = sessionData.session || "";
+
+    if (isSectionView) {
+      // ── SECTION / SCHOOL-WIDE VIEW ──────────────────────────
+      var sectionClasses = [];
+      var sectionTitle   = "";
+      if (classBase === "__ALL__") {
+        sectionClasses = ALL_CLASSES.slice();
+        sectionTitle   = "Entire School";
+      } else if (classBase === "__SECONDARY__") {
+        sectionClasses = SS_CLASSES.concat(JS_CLASSES);
+        sectionTitle   = "Secondary Section (SS + JS)";
+      } else {
+        sectionClasses = BASIC_CLASSES.concat(NURSERY_CLASSES).concat(CRECHE_CLASSES);
+        sectionTitle   = "Basic, Nursery & Creche";
+      }
+
+      // Fetch all students + attendance + holidays for these classes
+      const [allStudentsArr, holidays] = await Promise.all([
+        Promise.all(sectionClasses.map(function(c){ return getStudentsByClass(c); })).then(function(r){ return r.flat(); }),
+        getHolidays(session, term)
+      ]);
+      const recsArr = await Promise.all(
+        sectionClasses.map(function(c){ return getAttendanceByClassBaseTerm(c, term, session); })
+      );
+      const allRecs = recsArr.flat();
+
+      const holidayDates = new Set(holidays.map(function(h){ return h.date; }));
+      allRecs.filter(function(r){ return r.status === "Holiday"; }).forEach(function(r){ holidayDates.add(r.date); });
+      const nonHolRecs = allRecs.filter(function(r){ return r.status !== "Holiday" && !holidayDates.has(r.date); });
+
+      const totalStudents = allStudentsArr.length;
+      const boys          = allStudentsArr.filter(function(s){ return s.gender === "Male"; }).length;
+      const girls         = allStudentsArr.filter(function(s){ return s.gender === "Female"; }).length;
+
+      const schoolDays  = [...new Set(nonHolRecs.map(function(r){ return r.date; }))].filter(function(d){ return !isWeekend(d); }).length;
+      const possible    = schoolDays * 2 * totalStudents;
+
+      const presRecs    = nonHolRecs.filter(function(r){ return r.status === "Present"; });
+      const totalAM     = presRecs.reduce(function(s,r){ return s+(r.morning||0); }, 0);
+      const totalPM     = presRecs.reduce(function(s,r){ return s+(r.afternoon||0); }, 0);
+      const totalPres   = totalAM + totalPM;
+
+      const boysPresRecs  = presRecs.filter(function(r){ return r.gender === "Male"; });
+      const girlsPresRecs = presRecs.filter(function(r){ return r.gender === "Female"; });
+      const boysAM   = boysPresRecs.reduce(function(s,r){ return s+(r.morning||0); }, 0);
+      const boysPM   = boysPresRecs.reduce(function(s,r){ return s+(r.afternoon||0); }, 0);
+      const girlsAM  = girlsPresRecs.reduce(function(s,r){ return s+(r.morning||0); }, 0);
+      const girlsPM  = girlsPresRecs.reduce(function(s,r){ return s+(r.afternoon||0); }, 0);
+      const boysPres  = boysAM + boysPM;
+      const girlsPres = girlsAM + girlsPM;
+
+      const termPct = possible > 0 ? ((totalPres/possible)*100).toFixed(1) : "0";
+      const termAvg = (schoolDays*2) > 0 ? (totalPres/(schoolDays*2)).toFixed(1) : "0";
+
+      const $t = $("sectionSummaryTitle");
+      if ($t) $t.innerHTML = "<i class='bi bi-globe'></i> " + sectionTitle + " — " + TERM_LABELS[term];
+
+      $("sectionSummaryCards").innerHTML = [
+        { val: totalStudents,         lbl: "Total Students",               sub: boys+"B · "+girls+"G",               color:"#4f46e5" },
+        { val: totalAM+"+"+totalPM,   lbl: "Total Attendance (AM + PM)",   sub: "Total: "+totalPres+" sessions",     color:"#059669" },
+        { val: termPct+"%",           lbl: "Term Attendance %",            sub: totalPres+" ÷ "+possible+" × 100",   color:"#2563eb" },
+        { val: termAvg,               lbl: "Average Per Session",          sub: "Total ÷ school sessions open",      color:"#7c3aed" },
+        { val: boysAM+"+"+boysPM,     lbl: "Boys Attendance (AM + PM)",    sub: "Total: "+boysPres+" sessions",      color:"#0891b2" },
+        { val: girlsAM+"+"+girlsPM,   lbl: "Girls Attendance (AM + PM)",   sub: "Total: "+girlsPres+" sessions",     color:"#db2777" }
+      ].map(function(c){ return `<div class="stat-card">
+        <div class="stat-icon" style="background:${c.color}22"><i class="bi bi-bar-chart-fill" style="color:${c.color}"></i></div>
+        <div><div class="stat-val" style="color:${c.color};font-size:1.1rem">${c.val}</div>
+        <div class="stat-lbl">${c.lbl}</div>
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px;word-break:break-word">${c.sub}</div></div>
+      </div>`; }).join("");
+
+      if (sectionSummaryEl) sectionSummaryEl.style.display = "block";
+
+    } else {
+      // ── INDIVIDUAL CLASS VIEW (existing logic) ──────────────
+      const termWeeks = countSchoolWeeks(sessionData.termStartDate, sessionData.termEndDate);
+
+    // Fetch BOTH arms combined
+    const [students, recs, holidays] = await Promise.all([
+      getStudentsByClass(classBase),
+      getAttendanceByClassBaseTerm(classBase, term, session),
+      getHolidays(session, term)
+    ]);
+
+    const holidayDates  = new Set(holidays.map(h => h.date));
+    // Also treat dates where attendance status is "Holiday" as holiday dates
+    recs.filter(r => r.status === "Holiday").forEach(r => holidayDates.add(r.date));
+
+    const totalStudents = students.length;
+    const boys  = students.filter(s => s.gender === "Male").length;
+    const girls = students.filter(s => s.gender === "Female").length;
+
+    // Group by date — use r.total (morning+afternoon sessions) not record count
+    const byDate = {};
+    recs.forEach(r => {
+      if (r.status === "Holiday" || holidayDates.has(r.date)) return;
+      if (!byDate[r.date]) byDate[r.date] = { present:0, absent:0, late:0, boys:0, girls:0 };
+      const d = byDate[r.date];
+      if (r.status === "Present") {
+        d.present += r.total||2; // AM + PM sessions
+        if (r.gender === "Male") d.boys += r.total||2;
+        else d.girls += r.total||2;
+      }
+      else if (r.status === "Absent") d.absent++;
+      else if (r.status === "Late")   d.late++;
+    });
+
+    const schoolDays    = Object.keys(byDate).filter(d => !isWeekend(d)).length;
+    // Possible = students × school days × 2 sessions
+    const totalPossible = schoolDays * 2 * totalStudents;
+    const totalPresent  = Object.values(byDate).reduce((s, d) => s + d.present, 0);
+    const boysPresent   = Object.values(byDate).reduce((s, d) => s + d.boys, 0);
+    const girlsPresent  = Object.values(byDate).reduce((s, d) => s + d.girls, 0);
+    const totalLate     = recs.filter(r => !holidayDates.has(r.date) && r.status === "Late").length;
+    const totalAbsent   = recs.filter(r => !holidayDates.has(r.date) && r.status === "Absent").length;
+    const termRate      = totalPossible > 0 ? ((totalPresent / totalPossible) * 100).toFixed(1) : "0";
+    const boysRate      = boys  > 0 && schoolDays > 0 ? ((boysPresent  / (boys*schoolDays*2))  * 100).toFixed(1) : "0";
+    const girlsRate     = girls > 0 && schoolDays > 0 ? ((girlsPresent / (girls*schoolDays*2)) * 100).toFixed(1) : "0";
+
+    // Total holidays
+    const totalHolidays = holidayDates.size;
+
+    // ── Group by week using session totals ────────────────────
+    const termStart2 = sessionData.termStartDate ? new Date(sessionData.termStartDate) : null;
+    const byWeekTemp = {};
+    Object.keys(byDate).sort().forEach(d => {
+      if (isWeekend(d)) return;
+      let wk;
+      if (termStart2) {
+        const diff = Math.floor((new Date(d) - termStart2) / (7*24*60*60*1000));
+        wk = "Week " + (diff + 1);
+      } else { wk = "Week " + getWeekNumber(d); }
+      if (!byWeekTemp[wk]) byWeekTemp[wk] = { days:0, present:0, boys:0, girls:0, absent:0 };
+      byWeekTemp[wk].days++;
+      byWeekTemp[wk].present += byDate[d].present; // already summed sessions
+      byWeekTemp[wk].boys    += byDate[d].boys;
+      byWeekTemp[wk].girls   += byDate[d].girls;
+      byWeekTemp[wk].absent  += byDate[d].absent;
+    });
+    const weekKeysSorted = Object.keys(byWeekTemp).sort((a,b) => parseInt(a.split(" ")[1]) - parseInt(b.split(" ")[1]));
+
+    // ── CORRECT FORMULAS ──────────────────────────────────────
+    // Term attendance rate = Total present ÷ (students × school days × 2) × 100
+    const termRateCorrect = totalPossible > 0
+      ? ((totalPresent / totalPossible) * 100).toFixed(1) : "0";
+
+    // Term average = Total present ÷ (school days × 2) — average sessions per day
+    const termAvg = (schoolDays * 2) > 0
+      ? (totalPresent / (schoolDays * 2)).toFixed(1) : "0";
+
+    // This week % = Total present this week ÷ (students × school days this week × 2) × 100
+    const lastWk     = weekKeysSorted[weekKeysSorted.length - 1];
+    const lastWkData = lastWk ? byWeekTemp[lastWk] : null;
+    const weekPct    = lastWkData && (lastWkData.days * 2 * totalStudents) > 0
+      ? ((lastWkData.present / (lastWkData.days * 2 * totalStudents)) * 100).toFixed(1) : "0";
+
+    $("analyticsCards").innerHTML = [
+      { val: totalStudents,      lbl: "Total Students",        sub: boys+"B · "+girls+"G",                           color:"#4f46e5" },
+      { val: schoolDays,         lbl: "School Days Open",      sub: (termWeeks||"?")+" weeks · excl. holidays",      color:"#0891b2" },
+      { val: totalHolidays,      lbl: "Total Holidays",        sub: "Days school was closed",                        color:"#f59e0b" },
+      { val: totalPresent,       lbl: "Total Attendance Term", sub: totalPossible+" possible sessions",              color:"#10b981" },
+      { val: termRateCorrect+"%",lbl: "Term Attendance Rate",  sub: totalPresent+" ÷ "+totalPossible+" × 100",       color:"#059669" },
+      { val: termAvg,            lbl: "Term Avg Per Session",  sub: totalPresent+" ÷ "+(schoolDays*2)+" sessions",   color:"#7c3aed" },
+      { val: weekPct+"%",        lbl: "This Week Att. %",      sub: lastWk||"No data yet",                           color:"#0ea5e9" },
+      { val: totalLate,          lbl: "Total Late",            sub: totalAbsent+" Absences",                         color:"#f59e0b" },
+      { val: boysRate+"%",       lbl: "Boys Att. Rate",        sub: boysPresent+" ÷ "+(boys*schoolDays*2)+" × 100",  color:"#2563eb" },
+      { val: girlsRate+"%",      lbl: "Girls Att. Rate",       sub: girlsPresent+" ÷ "+(girls*schoolDays*2)+" × 100",color:"#db2777" }
+    ].map(c => `<div class="stat-card">
+      <div class="stat-icon" style="background:${c.color}22"><i class="bi bi-bar-chart-fill" style="color:${c.color}"></i></div>
+      <div><div class="stat-val" style="color:${c.color}">${c.val}</div>
+      <div class="stat-lbl">${c.lbl}</div>
+      <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px;word-break:break-word">${c.sub}</div></div>
+    </div>`).join("");
+
+    // ── Weekly breakdown table ────────────────────────────────
+    const termStart = sessionData.termStartDate ? new Date(sessionData.termStartDate) : null;
+    const byWeek = byWeekTemp; // already built above
+    const weekKeys = weekKeysSorted;
+    const weekRows = weekKeys.map(wk => {
+      const w = byWeek[wk];
+      // Week % = total present ÷ (students × school days this week × 2) × 100
+      const possible = w.days * 2 * totalStudents;
+      const pct = possible > 0 ? ((w.present / possible) * 100).toFixed(1) : "0";
+      const pctClass = parseFloat(pct) >= 75 ? "badge-success" : parseFloat(pct) >= 50 ? "badge-warning" : "badge-danger";
+      return `<tr>
+        <td>${wk}</td><td>${w.days * 2}</td>
+        <td>${w.boys}</td><td>${w.girls}</td><td>${w.present}</td>
+        <td><span class="badge ${w.absent>0?"badge-danger":"badge-success"}">${w.absent}</span></td>
+        <td><span class="badge ${pctClass}">${pct}%</span></td>
+      </tr>`;
+    });
+    // Term total row in weekly table
+    const termTotalRow = `<tr style="background:#e0e7ff;font-weight:900">
+      <td>TERM TOTAL</td>
+      <td>${schoolDays * 2}</td>
+      <td>${boysPresent}</td><td>${girlsPresent}</td><td>${totalPresent}</td>
+      <td><span class="badge badge-danger">${totalAbsent}</span></td>
+      <td><span class="badge badge-success">${termRateCorrect}%</span></td>
+    </tr>`;
+    $("weeklyTableBody").innerHTML = weekRows.join("") + termTotalRow || `<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--text-muted)">No data.</td></tr>`;
+
+    // Top student by attendance
+    const studentAttMap = {};
+    recs.forEach(r => {
+      if (!studentAttMap[r.regNumber]) studentAttMap[r.regNumber] = { name: r.fullName, present: 0 };
+      if (r.status === "Present") studentAttMap[r.regNumber].present += r.total||2;
+    });
+    let topStudent = null, topScore = -1;
+    Object.values(studentAttMap).forEach(v => { if (v.present > topScore) { topScore = v.present; topStudent = v; } });
+    const topStudentHtml = topStudent
+      ? `<div style="margin-top:12px;padding:12px 16px;background:var(--success-light);border-radius:8px;font-size:.85rem">
+          <i class="bi bi-star-fill" style="color:#f59e0b"></i>
+          <strong> Highest Attendance:</strong> ${topStudent.name}
+          <span class="badge badge-success" style="margin-left:8px">${topScore} sessions</span>
+          <span style="color:var(--text-muted);font-size:.78rem;margin-left:6px">
+            (${(totalPossible>0?((topScore/totalPossible)*100).toFixed(1):"0")}%)
+          </span>
+        </div>`
+      : "";
+    const analyticsTopEl = $("analyticsTopStudent");
+    if (analyticsTopEl) analyticsTopEl.innerHTML = topStudentHtml;
+
+    // Daily detail
+    $("dailyDetailBody").innerHTML = Object.keys(byDate).sort().reverse().map(d => {
+      const info = byDate[d];
+      const isH  = holidayDates.has(d);
+      return `<tr>
+        <td>${d}</td><td>${getDayName(d)}</td>
+        <td>${isH?"H":info.boys}</td><td>${isH?"H":info.girls}</td>
+        <td>${isH?"Holiday":`<span class="badge badge-success">${info.present}</span>`}</td>
+        <td>${isH?"—":`<span class="badge badge-danger">${info.absent}</span>`}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted)">No records found.</td></tr>`;
+
+    $("analyticsResult").style.display = "block";
+    } // end else (individual class view)
+
+  } catch(e) { toast(e.message, "error"); console.error(e); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-bar-chart-fill"></i> Generate Report'; }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  PER-STUDENT SUMMARY — Admin only
+// ══════════════════════════════════════════════════════════════
+let _perStudentData = { students:[], weekKeys:[], summaryMap:{}, possible:0, classBase:"", term:"" };
+
+$("loadPerStudentBtn")?.addEventListener("click", async () => {
+  const classBase = $("perStudentClass").value;
+  const term      = $("perStudentTerm").value;
+  if (!classBase) { toast("Select a class.", "error"); return; }
+  const btn = $("loadPerStudentBtn"); btn.disabled = true; btn.textContent = "Loading...";
+  try {
+    const sessionData  = await getSession();
+    const session      = sessionData.session || "";
+    const termStart    = sessionData.termStartDate || null;
+    const [students, recs, holidays] = await Promise.all([
+      getStudentsByClass(classBase),
+      getAttendanceByClassBaseTerm(classBase, term, session),
+      getHolidays(session, term)
+    ]);
+
+    const holidayDates = new Set(holidays.map(h => h.date));
+    // Also treat attendance Holiday status dates as holidays
+    recs.filter(r => r.status === "Holiday").forEach(r => holidayDates.add(r.date));
+
+    const nonHolRecs  = recs.filter(r => r.status !== "Holiday" && !holidayDates.has(r.date));
+    const schoolDates = [...new Set(nonHolRecs.map(r => r.date))].filter(d => !isWeekend(d)).sort();
+    const possible    = schoolDates.length * 2;
+
+    // Build week labels in term order
+    const weekSet = new Set();
+    schoolDates.forEach(d => {
+      let wkLabel;
+      if (termStart) {
+        const diff = Math.floor((new Date(d) - new Date(termStart)) / (7*24*60*60*1000));
+        wkLabel = "Wk " + (diff + 1);
+      } else {
+        wkLabel = "Wk " + getWeekNumber(d);
+      }
+      weekSet.add(wkLabel);
+    });
+    const weekKeys = [...weekSet].sort((a,b) => parseInt(a.split(" ")[1]) - parseInt(b.split(" ")[1]));
+
+    // Build per-student weekly summary — skip Holiday records
+    const summaryMap = {};
+    nonHolRecs.forEach(r => {
+      if (!summaryMap[r.regNumber]) {
+        summaryMap[r.regNumber] = { present:0, absent:0, weeks:{} };
+        weekKeys.forEach(wk => { summaryMap[r.regNumber].weeks[wk] = 0; });
+      }
+      let wkLabel;
+      if (termStart) {
+        const diff = Math.floor((new Date(r.date) - new Date(termStart)) / (7*24*60*60*1000));
+        wkLabel = "Wk " + (diff + 1);
+      } else {
+        wkLabel = "Wk " + getWeekNumber(r.date);
+      }
+      if (r.status === "Present") {
+        summaryMap[r.regNumber].present += r.total || 2;
+        if (summaryMap[r.regNumber].weeks[wkLabel] !== undefined) {
+          summaryMap[r.regNumber].weeks[wkLabel] += r.total || 2;
+        }
+      } else {
+        summaryMap[r.regNumber].absent++;
+      }
+    });
+
+    // Cache for Excel export
+    _perStudentData = { students, weekKeys, summaryMap, possible, classBase, term };
+
+    // Build table header
+    const theadRow = `<tr>
+      <th>Reg No.</th><th>Student Name</th><th>Gender</th>
+      ${weekKeys.map(wk => `<th style="text-align:center">${wk}<br><small>/10</small></th>`).join("")}
+      <th style="text-align:center">Total<br><small>/${possible}</small></th>
+      <th style="text-align:center">Att %</th>
+    </tr>`;
+    $("perStudentThead").innerHTML = theadRow;
+
+    const sorted = students.sort((a,b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
+
+    // Pre-compute class week totals and overall for footer
+    const classWkTotals = {};
+    weekKeys.forEach(wk => { classWkTotals[wk] = 0; });
+    let classOverallTotal = 0;
+    sorted.forEach(s => {
+      const info = summaryMap[s.regNumber] || { present:0, weeks:{} };
+      // Term total = sum of all weekly totals for this student
+      const studentTermTotal = weekKeys.reduce((sum, wk) => sum + (info.weeks?.[wk]||0), 0);
+      weekKeys.forEach(wk => { classWkTotals[wk] += info.weeks?.[wk]||0; });
+      classOverallTotal += studentTermTotal;
+    });
+    const classPct = possible > 0 && sorted.length > 0
+      ? ((classOverallTotal / (possible * sorted.length)) * 100).toFixed(1) : "0";
+
+    $("perStudentTbody").innerHTML = sorted.map(s => {
+      const info = summaryMap[s.regNumber] || { present:0, absent:0, weeks:{} };
+      // Student term total = sum of weekly totals
+      const studentTermTotal = weekKeys.reduce((sum, wk) => sum + (info.weeks?.[wk]||0), 0);
+      // Att % = student term total ÷ possible × 100
+      const pct = possible > 0 ? ((studentTermTotal / possible) * 100).toFixed(1) : "0";
+      const cls = parseFloat(pct) >= 75 ? "badge-success" : parseFloat(pct) >= 50 ? "badge-warning" : "badge-danger";
+      const wkCells = weekKeys.map(wk => `<td style="text-align:center">${info.weeks?.[wk]||0}</td>`).join("");
+      return `<tr>
+        <td><strong>${s.regNumber}</strong></td>
+        <td style="font-weight:700">${s.fullName||"—"}</td>
+        <td><span class="badge ${s.gender==="Female"?"badge-pink":"badge-blue"}" style="font-size:.7rem">${s.gender||"—"}</span></td>
+        ${wkCells}
+        <td style="text-align:center;font-weight:800">${studentTermTotal}</td>
+        <td style="text-align:center"><span class="badge ${cls}">${pct}%</span></td>
+      </tr>`;
+    }).join("") +
+    `<tr style="background:#e0e7ff;font-weight:900;font-size:.82rem">
+      <td colspan="3" style="text-align:left">CLASS TOTAL</td>
+      ${weekKeys.map(wk => `<td style="text-align:center">${classWkTotals[wk]}</td>`).join("")}
+      <td style="text-align:center">${classOverallTotal}</td>
+      <td style="text-align:center"><span class="badge badge-primary">${classPct}%</span></td>
+    </tr>` ||
+    `<tr><td colspan="${4+weekKeys.length}" style="text-align:center;padding:20px;color:var(--text-muted)">No students found.</td></tr>`;
+
+    $("perStudentTitle").innerHTML = `<i class="bi bi-people-fill"></i> ${classBase} — ${TERM_LABELS[term]} Student Summary (${students.length} students)`;
+    $("perStudentCard").style.display = "block";
+  } catch(e) { toast(e.message, "error"); console.error(e); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load'; }
+});
+
+// ── Export per-student to Excel ───────────────────────────────
+$("exportPerStudentBtn")?.addEventListener("click", function() {
+  if (!_perStudentData.students.length) { toast("Load data first.", "error"); return; }
+  if (typeof XLSX === "undefined") { toast("Excel library not loaded.", "error"); return; }
+
+  var d        = _perStudentData;
+  var wsData   = [];
+  var possible = d.possible;
+
+  wsData.push([(_schoolName||"BrightSchool").toUpperCase()]);
+  wsData.push(["ATTENDANCE SUMMARY — " + d.classBase + " — " + TERM_LABELS[d.term]]);
+  wsData.push([""]);
+
+  var hRow = ["Reg No.", "Student Name", "Gender"];
+  d.weekKeys.forEach(function(wk) { hRow.push(wk + " (/10)"); });
+  hRow.push("Total (/" + possible + ")", "Att %");
+  wsData.push(hRow);
+
+  d.students.sort(function(a,b){ return (a.regNumber||"").localeCompare(b.regNumber||"",undefined,{numeric:true}); }).forEach(function(s) {
+    var info = d.summaryMap[s.regNumber] || { present:0, weeks:{} };
+    var pct  = possible > 0 ? parseFloat(((info.present/possible)*100).toFixed(1)) : 0;
+    var row  = [s.regNumber, s.fullName||"—", s.gender||"—"];
+    d.weekKeys.forEach(function(wk) { row.push(info.weeks?.[wk]||0); });
+    row.push(info.present, pct+"%");
+    wsData.push(row);
+  });
+
+  wsData.push([""]);
+  wsData.push(["Generated: " + new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})]);
+  wsData.push(["Developed by Brightest Digital Services"]);
+
+  var wb  = XLSX.utils.book_new();
+  var ws  = XLSX.utils.aoa_to_sheet(wsData);
+  ws["!cols"] = [{wch:12},{wch:28},{wch:10}];
+  d.weekKeys.forEach(function() { ws["!cols"].push({wch:8}); });
+  ws["!cols"].push({wch:10},{wch:8});
+
+  var sheetName = d.classBase.replace(/[\/\\*?\[\]]/g,"").substring(0,31);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+  var wbout = XLSX.write(wb, { bookType:"xlsx", type:"array" });
+  var blob  = new Blob([wbout], { type:"application/octet-stream" });
+  var url   = URL.createObjectURL(blob);
+  var a     = document.createElement("a");
+  a.href    = url;
+  a.download = "Attendance_" + d.classBase + "_" + TERM_LABELS[d.term] + ".xlsx";
+  document.body.appendChild(a); a.click();
+  setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  toast("Excel downloaded.", "success");
+});
+
+// ══════════════════════════════════════════════════════════════
+//  DASHBOARD ANALYTICS — Role-based
+// ══════════════════════════════════════════════════════════════
+async function loadDashboardAnalytics() {
+  try {
+    const sessionData = await getSession();
+    const term        = sessionData.currentTerm || "1";
+    const session     = sessionData.session || "";
+    const today       = new Date().toISOString().split("T")[0];
+    const holidays    = await getHolidays(session, term);
+    const holidayDates = new Set(holidays.map(h => h.date));
+
+    // ── ADMIN: School-wide stats ──────────────────────────────
+    if (_isMaster) {
+      const allStudents = await getAllStudents();
+      const classGroups = {};
+      allStudents.forEach(s => {
+        if (!classGroups[s.classArm]) classGroups[s.classArm] = [];
+        classGroups[s.classArm].push(s);
+      });
+
+      // 1st position per class
+      const firstPosRows = [];
+      await Promise.all(Object.keys(classGroups).map(async arm => {
+        const scoresRaw = await getScoresByClassArmTerm(arm, term);
+        const scores = scoresRaw.filter(sc => !sc.session || sc.session === session);
+        const totals = {};
+        scores.forEach(sc => { totals[sc.regNumber] = (totals[sc.regNumber]||0)+(sc.test1||0)+(sc.test2||0)+(sc.exam||0); });
+        let best = null, bestScore = -1;
+        classGroups[arm].forEach(s => { const t=totals[s.regNumber]||0; if(t>bestScore){bestScore=t;best=s;} });
+        if (best && bestScore > 0) firstPosRows.push({ arm, name: best.fullName, score: bestScore });
+      }));
+      const fpEl = $("firstPositionList");
+      if (fpEl) fpEl.innerHTML = firstPosRows.length
+        ? firstPosRows.sort((a,b)=>a.arm.localeCompare(b.arm)).map(r =>
+            `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border)">
+              <div><span class="badge badge-warning" style="margin-right:6px">${r.arm}</span><strong>${r.name}</strong></div>
+              <span class="badge badge-primary">${r.score} pts</span>
+            </div>`).join("")
+        : `<div style="color:var(--text-muted);padding:8px">No score data yet.</div>`;
+
+      // Highest attendance per class (excluding holidays)
+      const allAttRecs = await getAllAttendanceByTerm(term, session);
+      const attByClass = {};
+      allAttRecs.filter(r => !holidayDates.has(r.date)).forEach(r => {
+        if (!attByClass[r.classArm]) attByClass[r.classArm] = {};
+        if (!attByClass[r.classArm][r.regNumber]) attByClass[r.classArm][r.regNumber] = { name:r.fullName, total:0 };
+        if (r.status === "Present") attByClass[r.classArm][r.regNumber].total += r.total||2;
+      });
+      const highAttRows = [];
+      Object.keys(attByClass).forEach(arm => {
+        let best = null, bestAtt = -1;
+        Object.values(attByClass[arm]).forEach(v => { if(v.total>bestAtt){bestAtt=v.total;best=v;} });
+        if (best) highAttRows.push({ arm, name: best.name, total: bestAtt });
+      });
+      const haEl = $("highAttendanceList");
+      if (haEl) haEl.innerHTML = highAttRows.length
+        ? highAttRows.sort((a,b)=>a.arm.localeCompare(b.arm)).map(r =>
+            `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border)">
+              <div><span class="badge badge-success" style="margin-right:6px">${r.arm}</span><strong>${r.name}</strong></div>
+              <span class="badge badge-info">${r.total} sessions</span>
+            </div>`).join("")
+        : `<div style="color:var(--text-muted);padding:8px">No attendance data yet.</div>`;
+
+      // Attendance stat cards (excluding holidays)
+      allAttRecs.filter(r => r.status === "Holiday").forEach(r => holidayDates.add(r.date));
+      const nonHolAtt = allAttRecs.filter(r => r.status !== "Holiday" && !holidayDates.has(r.date));
+
+      const totalHolidayDates = holidayDates.size;
+
+      // Today's attendance — AM + PM separately
+      const todayRecs   = nonHolAtt.filter(r => r.date === today && r.status === "Present");
+      const todayAM     = todayRecs.reduce((s, r) => s + (r.morning||0), 0);
+      const todayPM     = todayRecs.reduce((s, r) => s + (r.afternoon||0), 0);
+      const todayPres   = todayAM + todayPM;
+
+      // Term total sessions present
+      const termPres = nonHolAtt
+        .filter(r => r.status === "Present")
+        .reduce((s, r) => s + (r.total||2), 0);
+
+      // School days open this term
+      const schoolDaysOpen = [...new Set(nonHolAtt.map(r => r.date))].filter(d => !isWeekend(d)).length;
+
+      // This week: Total sessions present ÷ (students × school days this week × 2) × 100
+      const weekNum      = getWeekNumber(today);
+      const weekRecs     = nonHolAtt.filter(r => r.week === String(weekNum) && r.session === session);
+      const weekPres     = weekRecs.filter(r => r.status === "Present").reduce((s, r) => s + (r.total||2), 0);
+      const weekDays     = [...new Set(weekRecs.map(r => r.date))].filter(d => !isWeekend(d)).length;
+      const weekStudents = [...new Set(weekRecs.map(r => r.regNumber))].length;
+      const weekPoss     = weekDays * 2 * (weekStudents || 1);
+      const weekPct      = weekPoss > 0 ? ((weekPres / weekPoss) * 100).toFixed(1) : "0";
+
+      const el = id => $(id);
+      if (el("statAttToday")) {
+        el("statAttToday").innerHTML = todayAM + "+" + todayPM +
+          `<div style="font-size:.72rem;color:var(--text-muted);font-weight:600;margin-top:2px">Total: ${todayPres} sessions</div>`;
+      }
+      if (el("statAttWeek"))   el("statAttWeek").textContent   = weekPres;
+      if (el("statHolidays"))  el("statHolidays").textContent  = totalHolidayDates;
+      if (el("statAttTerm"))   el("statAttTerm").textContent   = termPres;
+      if (el("statAttWeekPct"))el("statAttWeekPct").textContent= weekPct + "%";
+      if (el("statSession"))   el("statSession").textContent   = session || "—";
+      if (el("statTerm"))      el("statTerm").textContent      = TERM_LABELS[term] || "—";
+      if (el("statClasses"))   el("statClasses").textContent   = new Set(allStudents.map(s=>s.classBase)).size;
+    }
+
+    // ── FORM TEACHER: Class-specific stats ───────────────────
+    if (_isFT && !_isMaster) {
+      const ftArms      = ALL_ARMS.filter(a => armToBase(a) === _ftClass);
+      const [ftStudents, allFtAttRaw] = await Promise.all([
+        getStudentsByClass(_ftClass),
+        Promise.all(ftArms.map(arm => getAttendanceByClassTerm(arm, term, session))).then(r => r.flat())
+      ]);
+      const allFtScRaw = (await Promise.all(ftArms.map(arm => getScoresByClassArmTerm(arm, term)))).flat();
+      const allFtSc = allFtScRaw.filter(sc => !sc.session || sc.session === session);
+
+      // Exclude holiday records (same as admin formula)
+      const ftHolidayDates = new Set(holidays.map(h => h.date));
+      allFtAttRaw.filter(r => r.status === "Holiday").forEach(r => ftHolidayDates.add(r.date));
+      const nonHolFtAtt = allFtAttRaw.filter(r => r.status !== "Holiday" && !ftHolidayDates.has(r.date));
+
+      // Today: AM + PM sessions (same as admin)
+      const todayFtRecs = nonHolFtAtt.filter(r => r.date === today && r.status === "Present");
+      const todayFtAM   = todayFtRecs.reduce((s, r) => s + (r.morning||0), 0);
+      const todayFtPM   = todayFtRecs.reduce((s, r) => s + (r.afternoon||0), 0);
+      const todayFtPres = todayFtAM + todayFtPM;
+
+      // This week: Total present sessions ÷ (students × school days this week × 2) × 100
+      const weekNumFt    = getWeekNumber(today);
+      const weekFtRecs   = nonHolFtAtt.filter(r => r.week === String(weekNumFt) && r.session === session);
+      const weekFtPres   = weekFtRecs.filter(r => r.status === "Present").reduce((s, r) => s + (r.total||2), 0);
+      const weekFtDays   = [...new Set(weekFtRecs.map(r => r.date))].filter(d => !isWeekend(d)).length;
+      const weekFtPoss   = weekFtDays * 2 * ftStudents.length;
+      const weekFtPct    = weekFtPoss > 0 ? ((weekFtPres / weekFtPoss) * 100).toFixed(1) : "0";
+
+      // Term: total present sessions (r.total = AM + PM)
+      const termFtPres   = nonHolFtAtt.filter(r => r.status === "Present").reduce((s, r) => s + (r.total||2), 0);
+
+      // School days open (unique non-holiday, non-weekend dates)
+      const schoolDaysFt = [...new Set(nonHolFtAtt.map(r => r.date))].filter(d => !isWeekend(d)).length;
+      // Term % = total present ÷ (students × school days × 2) × 100
+      const possibleFt   = schoolDaysFt * 2 * ftStudents.length;
+      const termPctFt    = possibleFt > 0 ? ((termFtPres / possibleFt) * 100).toFixed(1) : "0";
+
+      const fe = id => $(id);
+      if (fe("ftStatSession"))  fe("ftStatSession").textContent  = session||"—";
+      if (fe("ftStatTerm"))     fe("ftStatTerm").textContent     = TERM_LABELS[term]||"—";
+      if (fe("ftStatAttToday")) {
+        fe("ftStatAttToday").innerHTML = todayFtAM + "+" + todayFtPM +
+          `<div style="font-size:.7rem;color:var(--text-muted);font-weight:600;margin-top:2px">Total: ${todayFtPres}</div>`;
+      }
+      if (fe("ftStatAttWeek"))  fe("ftStatAttWeek").textContent  = weekFtPres + " (" + weekFtPct + "%)";
+      if (fe("ftStatAttTerm"))  fe("ftStatAttTerm").textContent  = termFtPres;
+      if (fe("ftStatAttPct"))   fe("ftStatAttPct").textContent   = termPctFt + "%";
+
+      // Top 6 students in class
+      const totals = {};
+      allFtSc.forEach(sc => { totals[sc.regNumber]=(totals[sc.regNumber]||0)+(sc.test1||0)+(sc.test2||0)+(sc.exam||0); });
+      const ranked = ftStudents
+        .map(s => ({ name: s.fullName, reg: s.regNumber, classArm: s.classArm, score: totals[s.regNumber]||0 }))
+        .filter(s => s.score > 0)
+        .sort((a,b) => b.score - a.score)
+        .slice(0, 6);
+      const ftFpEl = $("ftFirstPositionList");
+      if (ftFpEl) {
+        if (!ranked.length) {
+          ftFpEl.innerHTML = `<div style="padding:12px;color:var(--text-muted)">No score data yet for ${_ftClass}.</div>`;
+        } else {
+          ftFpEl.innerHTML = ranked.map((s, i) => {
+            const medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":"";
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 16px;border-bottom:1px solid var(--border)">
+              <div style="font-size:.83rem">${medal} <strong>${ordinal(i+1)}</strong> — ${s.name}
+                <span style="color:var(--text-muted);font-size:.75rem;margin-left:4px">(${s.classArm})</span>
+              </div>
+              <span class="badge badge-primary">${s.score} pts</span>
+            </div>`;
+          }).join("");
+        }
+      }
+
+      // Dual role: also load top 6 per subject they teach
+      if (_isST) {
+        const dualEl = $("dualStTopStudentsList");
+        if (dualEl) {
+          dualEl.innerHTML = "<div style='padding:12px;color:var(--text-muted)'>Loading...</div>";
+          const dualArmMap = {};
+          _stArms.forEach(function(arm) {
+            var base = armToBase(arm);
+            if (!dualArmMap[base]) dualArmMap[base] = [];
+            dualArmMap[base].push(arm);
+          });
+          var dualHtml = "";
+          for (var si = 0; si < _stSubjects.length; si++) {
+            var subject = _stSubjects[si];
+            var subScores = [], subStudents = [];
+            var armKeys = Object.keys(dualArmMap);
+            for (var ai = 0; ai < armKeys.length; ai++) {
+              var arms = dualArmMap[armKeys[ai]];
+              var scRaw = (await Promise.all(arms.map(function(arm){ return getScoresByClassArmSubjectTerm(arm, subject, term); }))).flat();
+              var sc = scRaw.filter(function(s){ return !s.session || s.session === session; });
+              var stu = (await Promise.all(arms.map(function(arm){ return getStudentsByClassArm(arm); }))).flat();
+              sc.forEach(function(s){ subScores.push(s); });
+              stu.forEach(function(s){ subStudents.push(s); });
+            }
+            var dualTotals = {};
+            subScores.forEach(function(sc){ dualTotals[sc.regNumber] = (dualTotals[sc.regNumber]||0)+(sc.test1||0)+(sc.test2||0)+(sc.exam||0); });
+            var dualRanked = subStudents
+              .map(function(s){ return { name:s.fullName, reg:s.regNumber, classArm:s.classArm, score:dualTotals[s.regNumber]||0 }; })
+              .filter(function(s){ return s.score > 0; })
+              .sort(function(a,b){ return b.score - a.score; })
+              .slice(0, 6);
+            if (dualRanked.length) {
+              dualHtml += "<div style='padding:10px 16px;border-bottom:1.5px solid var(--border)'>";
+              dualHtml += "<div style='font-weight:800;font-size:.85rem;color:var(--primary);margin-bottom:8px'><i class='bi bi-book-fill'></i> " + subject + "</div>";
+              dualRanked.forEach(function(s, i){
+                var medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":"";
+                dualHtml += "<div style='display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)'>";
+                dualHtml += "<div style='font-size:.83rem'>" + medal + " <strong>" + ordinal(i+1) + "</strong> — " + s.name + " <span style='color:var(--text-muted);font-size:.75rem;margin-left:4px'>(" + s.classArm + ")</span></div>";
+                dualHtml += "<span class='badge badge-primary'>" + s.score + " pts</span></div>";
+              });
+              dualHtml += "</div>";
+            }
+          }
+          dualEl.innerHTML = dualHtml || "<div style='padding:12px;color:var(--text-muted)'>No score data yet.</div>";
+        }
+      }
+    }
+
+    // ── SUBJECT TEACHER: Top 6 students per subject across all classes ─
+    if (_isST && !_isFT && !_isMaster) {
+      const stEl = $("stTopStudentsList");
+      if (!stEl) return;
+      stEl.innerHTML = `<div style="padding:12px;color:var(--text-muted)">Loading top students...</div>`;
+
+      // Group arms by class
+      const classArmMap = {};
+      _stArms.forEach(arm => {
+        const base = armToBase(arm);
+        if (!classArmMap[base]) classArmMap[base] = [];
+        classArmMap[base].push(arm);
+      });
+
+      let html = "";
+      for (const subject of _stSubjects) {
+        // Collect all students across ALL classes for this subject
+        const allScores   = [];
+        const allStudents = [];
+        for (const [classBase, arms] of Object.entries(classArmMap)) {
+          const scRaw = (await Promise.all(arms.map(arm => getScoresByClassArmSubjectTerm(arm, subject, term)))).flat();
+          const sc    = scRaw.filter(s => !s.session || s.session === session);
+          const stu = (await Promise.all(arms.map(arm => getStudentsByClassArm(arm)))).flat();
+          sc.forEach(s  => allScores.push(s));
+          stu.forEach(s => allStudents.push(s));
+        }
+        const totals = {};
+        allScores.forEach(sc => { totals[sc.regNumber] = (totals[sc.regNumber]||0)+(sc.test1||0)+(sc.test2||0)+(sc.exam||0); });
+        const ranked = allStudents
+          .map(s => ({ name:s.fullName, reg:s.regNumber, classArm:s.classArm, score:totals[s.regNumber]||0 }))
+          .filter(s => s.score > 0)
+          .sort((a,b) => b.score - a.score)
+          .slice(0, 6);
+
+        if (ranked.length) {
+          html += `<div style="padding:10px 16px;border-bottom:1.5px solid var(--border)">
+            <div style="font-weight:800;font-size:.85rem;color:var(--primary);margin-bottom:8px">
+              <i class="bi bi-book-fill"></i> ${subject}
+            </div>`;
+          ranked.forEach((s, i) => {
+            const medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":"";
+            html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
+              <div style="font-size:.83rem">${medal} <strong>${ordinal(i+1)}</strong> — ${s.name}
+                <span style="color:var(--text-muted);font-size:.75rem;margin-left:4px">(${s.classArm})</span>
+              </div>
+              <span class="badge badge-primary">${s.score} pts</span>
+            </div>`;
+          });
+          html += `</div>`;
+        }
+      }
+      stEl.innerHTML = html || `<div style="padding:12px;color:var(--text-muted)">No score data available yet.</div>`;
+    }
+
+  } catch(e) { console.error("loadDashboardAnalytics:", e); }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  RECORD BANK — Admin only
+// ══════════════════════════════════════════════════════════════
+let _rbData = { students:[], weekKeys:[], summaryMap:{}, possible:0, classBase:"", term:"", session:"" };
+
+$("loadRecordBankBtn")?.addEventListener("click", async () => {
+  if (!_isMaster) { toast("Record Bank is admin only.", "error"); return; }
+  const session   = $("rbSession").value;
+  const term      = $("rbTerm").value;
+  const classVal  = $("rbClass").value;
+  if (!session)  { toast("Please select an academic session.", "error"); return; }
+  if (!classVal) { toast("Select a class or section.", "error"); return; }
+
+  // Resolve section values into class lists
+  var isSectionRb = classVal === "__ALL__" || classVal === "__SECONDARY__" || classVal === "__BASIC_NURSERY_CRECHE__";
+  var rbClasses = [];
+  var rbLabel   = classVal;
+  if (classVal === "__ALL__") {
+    rbClasses = ALL_CLASSES.slice();
+    rbLabel   = "Entire School";
+  } else if (classVal === "__SECONDARY__") {
+    rbClasses = SS_CLASSES.concat(JS_CLASSES);
+    rbLabel   = "Secondary Section (SS + JS)";
+  } else if (classVal === "__BASIC_NURSERY_CRECHE__") {
+    rbClasses = BASIC_CLASSES.concat(NURSERY_CLASSES).concat(CRECHE_CLASSES);
+    rbLabel   = "Basic, Nursery & Creche";
+  } else {
+    rbClasses = [classVal];
+    rbLabel   = classVal;
+  }
+
+  const classBase = isSectionRb ? rbLabel : classVal;
+  const btn = $("loadRecordBankBtn"); btn.disabled = true; btn.textContent = "Loading...";
+  try {
+    const [allStudentsRaw, allRecsRaw, holidays, sessionData] = await Promise.all([
+      Promise.all(rbClasses.map(function(c){ return getStudentsByClass(c); })).then(function(r){ return r.flat(); }),
+      Promise.all(rbClasses.map(function(c){ return getAttendanceByClassBaseTerm(c, term, session); })).then(function(r){ return r.flat(); }),
+      getHolidays(session, term),
+      getSession()
+    ]);
+
+    var students = allStudentsRaw;
+    var recs     = allRecsRaw;
+
+    const termStart     = sessionData.termStartDate || null;
+    const holidayDates  = new Set(holidays.map(h => h.date));
+    // Also treat attendance Holiday status dates as holidays
+    recs.filter(r => r.status === "Holiday").forEach(r => holidayDates.add(r.date));
+
+    const nonHolRecs  = recs.filter(r => r.status !== "Holiday" && !holidayDates.has(r.date));
+    const schoolDates = [...new Set(nonHolRecs.map(r => r.date))].filter(d => !isWeekend(d)).sort();
+    const schoolDays  = schoolDates.length;
+    const possible    = schoolDays * 2;
+    const boys        = students.filter(s => s.gender === "Male").length;
+    const girls       = students.filter(s => s.gender === "Female").length;
+
+    // Build week labels
+    const weekSet = new Set();
+    schoolDates.forEach(d => {
+      let wkLabel;
+      if (termStart) {
+        const diff = Math.floor((new Date(d) - new Date(termStart)) / (7*24*60*60*1000));
+        wkLabel = "Wk " + (diff + 1);
+      } else {
+        wkLabel = "Wk " + getWeekNumber(d);
+      }
+      weekSet.add(wkLabel);
+    });
+    const weekKeys = [...weekSet].sort((a,b) => parseInt(a.split(" ")[1]) - parseInt(b.split(" ")[1]));
+
+    // Per-student weekly summary — skip Holiday records
+    const summaryMap = {};
+    nonHolRecs.forEach(r => {
+      if (!summaryMap[r.regNumber]) {
+        summaryMap[r.regNumber] = { present:0, absent:0, weeks:{} };
+        weekKeys.forEach(wk => { summaryMap[r.regNumber].weeks[wk] = 0; });
+      }
+      let wkLabel;
+      if (termStart) {
+        const diff = Math.floor((new Date(r.date) - new Date(termStart)) / (7*24*60*60*1000));
+        wkLabel = "Wk " + (diff + 1);
+      } else {
+        wkLabel = "Wk " + getWeekNumber(r.date);
+      }
+      if (r.status === "Present") {
+        summaryMap[r.regNumber].present += r.total||2;
+        if (summaryMap[r.regNumber].weeks[wkLabel] !== undefined)
+          summaryMap[r.regNumber].weeks[wkLabel] += r.total||2;
+      } else {
+        summaryMap[r.regNumber].absent++;
+      }
+    });
+
+    // Cache for Excel export
+    _rbData = { students, weekKeys, summaryMap, possible, classBase, term, session };
+
+    const totalPresent = Object.values(summaryMap).reduce((a,v) => a + v.present, 0);
+    const boysPresent  = nonHolRecs.filter(r => r.status==="Present" && r.gender==="Male").length;
+    const girlsPresent = nonHolRecs.filter(r => r.status==="Present" && r.gender==="Female").length;
+    const termRate     = (possible * students.length) > 0
+      ? ((totalPresent/(possible*students.length))*100).toFixed(1) : "0";
+
+    // Stat cards
+    $("rbAttCards").innerHTML = [
+      { val: students.length, lbl:"Total Students",       color:"#4f46e5" },
+      { val: schoolDays,      lbl:"School Days Open",     color:"#0891b2" },
+      { val: totalPresent,    lbl:"Total Present (Term)", color:"#10b981" },
+      { val: termRate+"%",    lbl:"Average Attendance",   color:"#7c3aed" },
+      { val: boysPresent,     lbl:"Boys Attendance",      color:"#2563eb" },
+      { val: girlsPresent,    lbl:"Girls Attendance",     color:"#db2777" },
+    ].map(c => `<div class="stat-card">
+      <div><div class="stat-val" style="color:${c.color}">${c.val}</div><div class="stat-lbl">${c.lbl}</div></div>
+    </div>`).join("");
+
+    // Weekly breakdown — use nonHolRecs (holidays already excluded)
+    const byWeek = {};
+    nonHolRecs.forEach(r => {
+      if (isWeekend(r.date)) return;
+      let wk;
+      if (termStart) {
+        const diff = Math.floor((new Date(r.date) - new Date(termStart)) / (7*24*60*60*1000));
+        wk = "Week " + (diff + 1);
+      } else {
+        wk = "Week " + getWeekNumber(r.date);
+      }
+      if (!byWeek[wk]) byWeek[wk] = { days:new Set(), present:0, boys:0, girls:0 };
+      byWeek[wk].days.add(r.date);
+      if (r.status === "Present") {
+        byWeek[wk].present++;
+        if (r.gender === "Male") byWeek[wk].boys++; else byWeek[wk].girls++;
+      }
+    });
+    $("rbWeeklyBody").innerHTML = Object.keys(byWeek)
+      .sort((a,b) => parseInt(a.split(" ")[1]) - parseInt(b.split(" ")[1]))
+      .map(wk => {
+        const w = byWeek[wk];
+        const d = w.days.size;
+        const poss = d * 2 * students.length;
+        const pct  = poss > 0 ? ((w.present/poss)*100).toFixed(1) : "0";
+        return `<tr><td>${wk}</td><td>${d*2}</td><td>${w.present}</td><td>${w.boys}</td><td>${w.girls}</td><td><strong>${pct}%</strong></td></tr>`;
+      }).join("") || `<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text-muted)">No attendance data.</td></tr>`;
+
+    // Individual student summary — with weekly columns + class totals row
+    const sorted = students.sort((a,b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
+    $("rbStudentThead").innerHTML = `<tr>
+      <th>Reg No.</th><th>Student Name</th><th>Gender</th>
+      ${weekKeys.map(wk => `<th style="text-align:center">${wk}<br><small>/10</small></th>`).join("")}
+      <th style="text-align:center">Total<br><small>/${possible}</small></th>
+      <th style="text-align:center">Att %</th>
+    </tr>`;
+
+    // Compute class week totals and overall total for footer
+    const classTotals = {};
+    weekKeys.forEach(wk => { classTotals[wk] = 0; });
+    let classOverallTotal = 0;
+    sorted.forEach(s => {
+      const info = summaryMap[s.regNumber] || { present:0, weeks:{} };
+      weekKeys.forEach(wk => { classTotals[wk] += info.weeks?.[wk]||0; });
+      classOverallTotal += info.present;
+    });
+    const classOverallPct = (possible * sorted.length) > 0
+      ? ((classOverallTotal/(possible*sorted.length))*100).toFixed(1) : "0";
+
+    const studentRows = sorted.map(s => {
+      const info = summaryMap[s.regNumber] || { present:0, absent:0, weeks:{} };
+      const pct  = possible > 0 ? ((info.present/possible)*100).toFixed(1) : "0";
+      const cls  = parseFloat(pct) >= 75 ? "badge-success" : parseFloat(pct) >= 50 ? "badge-warning" : "badge-danger";
+      const wkCells = weekKeys.map(wk => `<td style="text-align:center">${info.weeks?.[wk]||0}</td>`).join("");
+      return `<tr>
+        <td><strong>${s.regNumber}</strong></td>
+        <td style="font-weight:700">${s.fullName||"—"}</td>
+        <td><span class="badge ${s.gender==="Female"?"badge-pink":"badge-blue"}" style="font-size:.7rem">${s.gender||"—"}</span></td>
+        ${wkCells}
+        <td style="text-align:center;font-weight:800">${info.present}</td>
+        <td style="text-align:center"><span class="badge ${cls}">${pct}%</span></td>
+      </tr>`;
+    }).join("");
+
+    const totalsRow = `<tr style="background:#e0e7ff;font-weight:900;font-size:.82rem">
+      <td colspan="3" style="text-align:left">CLASS TOTAL</td>
+      ${weekKeys.map(wk => `<td style="text-align:center">${classTotals[wk]}</td>`).join("")}
+      <td style="text-align:center">${classOverallTotal}</td>
+      <td style="text-align:center"><span class="badge badge-primary">${classOverallPct}%</span></td>
+    </tr>`;
+
+    $("rbStudentBody").innerHTML = studentRows
+      ? studentRows + totalsRow
+      : `<tr><td colspan="${4+weekKeys.length}" style="text-align:center;padding:16px;color:var(--text-muted)">No students found.</td></tr>`;
+
+    // Broadsheet record — individual class only (not for section views)
+    const rbBsCard = $("rbBroadsheetCard");
+    if (isSectionRb) {
+      if (rbBsCard) rbBsCard.style.display = "none";
+    } else {
+      if (rbBsCard) rbBsCard.style.display = "block";
+      const allArms    = ALL_ARMS.filter(a => armToBase(a) === classVal);
+      const scoresList = await Promise.all(allArms.map(arm => getScoresByClassArmTerm(arm, term, session)));
+      const allScores  = scoresList.flat();
+      const subjects   = await getClassSubjects(classVal, term, session);
+      const scoreMap   = {};
+      allScores.forEach(sc => {
+        if (!scoreMap[sc.regNumber]) scoreMap[sc.regNumber] = {};
+        scoreMap[sc.regNumber][sc.subject] = sc;
+      });
+
+    const bsRows = students.map(s => {
+      const offAll  = !s.subjectsOffered || s.subjectsOffered === "all";
+      const offered = subjects.filter(sub => offAll || (Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(sub)));
+      let grand = 0;
+      offered.forEach(sub => { const sc = scoreMap[s.regNumber]?.[sub]; if(sc) grand += (sc.test1||0)+(sc.test2||0)+(sc.exam||0); });
+      return { ...s, offered, grand };
+    }).sort((a,b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
+
+    const posMap = {};
+    [...bsRows].sort((a,b) => b.grand - a.grand).forEach((r,i) => { posMap[r.regNumber] = ordinal(i+1); });
+
+    let bsThead = `<tr><th rowspan="2">S/N</th><th rowspan="2" style="text-align:left;min-width:140px">Student Name</th><th rowspan="2">Reg No.</th>`;
+    subjects.forEach(s => { bsThead += `<th colspan="5" style="background:#4338ca">${s}</th>`; });
+    bsThead += `<th rowspan="2">Grand Total</th><th rowspan="2">Average</th><th rowspan="2">Position</th></tr><tr>`;
+    subjects.forEach(() => { bsThead += `<th class="sub-header">T1</th><th class="sub-header">T2</th><th class="sub-header">Ex</th><th class="sub-header">Total</th><th class="sub-header">Pos</th>`; });
+    bsThead += "</tr>";
+
+    let bsTbody = "";
+    bsRows.forEach((r, idx) => {
+      let cols = "";
+      subjects.forEach(sub => {
+        if (!r.offered.includes(sub)) { cols += `<td colspan="5" style="text-align:center;color:#94a3b8;font-size:.72rem">N/A</td>`; return; }
+        const sc = scoreMap[r.regNumber]?.[sub];
+        const t1 = sc?.test1||0, t2=sc?.test2||0, ex=sc?.exam||0, tot=t1+t2+ex;
+        const g  = tot>0?grade(tot):"—";
+        cols += `<td>${t1||"—"}</td><td>${t2||"—"}</td><td>${ex||"—"}</td>
+                 <td class="${tot>0?gradeClass(g):""}" style="font-weight:800">${tot||"—"}</td>
+                 <td class="pos-cell">${posMap[r.regNumber]||"—"}</td>`;
+      });
+      const avg = r.offered.length > 0 ? (r.grand/r.offered.length).toFixed(1) : "0";
+      bsTbody += `<tr><td>${idx+1}</td><td class="student-info">${r.fullName||"—"}</td><td>${r.regNumber}</td>${cols}
+        <td style="font-weight:800">${r.grand}</td><td style="font-weight:800">${avg}</td>
+        <td class="pos-cell">${posMap[r.regNumber]||"—"}</td></tr>`;
+    });
+    $("rbBsThead").innerHTML = bsThead;
+    $("rbBsTbody").innerHTML = bsTbody || `<tr><td colspan="${3+subjects.length*5+3}" style="text-align:center;padding:20px;color:var(--text-muted)">No score data found.</td></tr>`;
+    } // end else (individual class broadsheet)
+
+    $("recordBankResult").style.display = "block";
+    toast("Records loaded — " + rbLabel + ".", "success");
+  } catch(e) { toast(e.message, "error"); console.error(e); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-archive"></i> Load Records'; }
+});
+
+// ── Export Record Bank student summary to Excel ───────────────
+$("exportRbStudentBtn")?.addEventListener("click", function() {
+  if (!_rbData.students.length) { toast("Load records first.", "error"); return; }
+  if (typeof XLSX === "undefined") { toast("Excel library not loaded.", "error"); return; }
+
+  var d        = _rbData;
+  var wsData   = [];
+  var possible = d.possible;
+
+  wsData.push([(_schoolName||"BrightSchool").toUpperCase()]);
+  wsData.push(["ATTENDANCE RECORD — " + d.classBase + " — " + TERM_LABELS[d.term] + " — " + d.session]);
+  wsData.push([""]);
+
+  var hRow = ["Reg No.", "Student Name", "Gender"];
+  d.weekKeys.forEach(function(wk) { hRow.push(wk + " (/10)"); });
+  hRow.push("Total (/" + possible + ")", "Att %");
+  wsData.push(hRow);
+
+  d.students.sort(function(a,b){ return (a.regNumber||"").localeCompare(b.regNumber||"",undefined,{numeric:true}); }).forEach(function(s) {
+    var info = d.summaryMap[s.regNumber] || { present:0, weeks:{} };
+    var pct  = possible > 0 ? parseFloat(((info.present/possible)*100).toFixed(1)) : 0;
+    var row  = [s.regNumber, s.fullName||"—", s.gender||"—"];
+    d.weekKeys.forEach(function(wk) { row.push(info.weeks?.[wk]||0); });
+    row.push(info.present, pct+"%");
+    wsData.push(row);
+  });
+
+  wsData.push([""]);
+  wsData.push(["Generated: " + new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})]);
+  wsData.push(["Developed by Brightest Digital Services"]);
+
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws["!cols"] = [{wch:12},{wch:28},{wch:10}];
+  d.weekKeys.forEach(function() { ws["!cols"].push({wch:8}); });
+  ws["!cols"].push({wch:10},{wch:8});
+
+  var sheetName = d.classBase.replace(/[\/\\*?\[\]]/g,"").substring(0,31);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+  var wbout  = XLSX.write(wb, { bookType:"xlsx", type:"array" });
+  var blob   = new Blob([wbout], { type:"application/octet-stream" });
+  var url    = URL.createObjectURL(blob);
+  var a      = document.createElement("a");
+  a.href     = url;
+  a.download = "AttRecord_" + d.classBase + "_" + TERM_LABELS[d.term] + "_" + d.session + ".xlsx";
+  document.body.appendChild(a); a.click();
+  setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  toast("Excel downloaded.", "success");
+});
+
+// Also call on section switch to attendance
+document.querySelector('[data-section="section-attendance"]')?.addEventListener("click", () => {
+  applyAttendanceTabs();
+});
+
+// ══════════════════════════════════════════════════════════════
+//  TEACHER NAMES — Admin only
+// ══════════════════════════════════════════════════════════════
+async function loadTeacherNamesUI() {
+  if (!_isMaster) return;
+  const listEl = $("teacherNamesList");
+  if (!listEl) return;
+
+  try {
+    const namesMap = await getTeacherNames();
+    // Gather all teacher emails from FT + ST
+    const allEmails = new Set([
+      ...Object.keys(FORM_TEACHERS),
+      ...Object.keys(SUBJECT_TEACHERS)
+    ]);
+
+    if (!allEmails.size) {
+      listEl.innerHTML = `<p style="color:var(--text-muted);font-size:.85rem">No teachers assigned yet. Add teachers in the Form/Subject Teacher sections below first.</p>`;
+      return;
+    }
+
+    listEl.innerHTML = [...allEmails].sort().map(email => {
+      const role = FORM_TEACHERS[email]
+        ? `Form Teacher · ${FORM_TEACHERS[email]}`
+        : `Subject Teacher`;
+      const savedName = namesMap[email] || "";
+      return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <div style="min-width:200px;flex:1">
+          <div style="font-weight:700;font-size:.83rem">${email}</div>
+          <div style="font-size:.72rem;color:var(--text-muted)">${role}</div>
+        </div>
+        <input type="text" class="form-control teacher-name-input" data-email="${email}"
+          value="${savedName}" placeholder="Enter display name…"
+          style="max-width:240px;flex:1"/>
+      </div>`;
+    }).join("");
+  } catch(e) { console.error(e); }
+}
+
+$("saveTeacherNamesBtn")?.addEventListener("click", async () => {
+  const inputs  = document.querySelectorAll(".teacher-name-input");
+  const namesMap = {};
+  inputs.forEach(inp => {
+    const email = inp.dataset.email;
+    const name  = inp.value.trim();
+    if (email && name) namesMap[email] = name;
+  });
+  const btn = $("saveTeacherNamesBtn"); btn.disabled = true; btn.textContent = "Saving...";
+  try {
+    await saveTeacherNames(namesMap);
+    toast("Teacher names saved successfully.", "success");
+  } catch(e) { toast(e.message, "error"); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save"></i> Save Names'; }
+});
+
+// Load teacher names UI when settings section is opened
+async function loadPendingUsers() {
+  if (!_isMaster) return;
+  const listEl = $("pendingUsersList");
+  if (!listEl) return;
+  try {
+    const pending = await getPendingUsers();
+    if (!pending.length) {
+      listEl.innerHTML = `<div style="padding:12px;color:var(--text-muted)"><i class="bi bi-check-circle-fill" style="color:var(--success)"></i> No pending users. All teachers have been assigned roles.</div>`;
+      return;
+    }
+    listEl.innerHTML = pending.map(u => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-weight:700;font-size:.88rem">${u.name||"—"}</div>
+          <div style="font-size:.78rem;color:var(--text-muted)">${u.email}</div>
+          <div style="font-size:.72rem;color:var(--text-muted)">Signed up: ${u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-GB") : "—"}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-success btn-sm" onclick="assignPendingUser('${u.email}','${u.uid}','FT')">
+            <i class="bi bi-person-check-fill"></i> Assign as Form Teacher
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="assignPendingUser('${u.email}','${u.uid}','ST')">
+            <i class="bi bi-book-fill"></i> Assign as Subject Teacher
+          </button>
+        </div>
+      </div>`).join("");
+  } catch(e) { if (listEl) listEl.innerHTML = `<div style="padding:12px;color:var(--danger)">Error loading pending users.</div>`; }
+}
+
+window.assignPendingUser = function(email, uid, roleType) {
+  // Pre-fill the email in the appropriate teacher assignment form
+  if (roleType === "FT") {
+    const ftEl = $("newFTEmail");
+    if (ftEl) { ftEl.value = email; ftEl.focus(); }
+    toast(`${email} pre-filled in Form Teacher assignment. Select their class and save.`, "info");
+  } else {
+    const stEl = $("newSTEmail");
+    if (stEl) { stEl.value = email; stEl.focus(); }
+    toast(`${email} pre-filled in Subject Teacher assignment. Select section, load subjects and save.`, "info");
+  }
+  // Mark as approved in Firestore
+  approvePendingUser(uid).then(() => loadPendingUsers()).catch(console.error);
+  // Scroll to teacher management section
+  showSection("section-settings");
+};
+
+$("refreshPendingBtn")?.addEventListener("click", loadPendingUsers);
+
+// Load teacher names UI when settings section is opened
+document.querySelector('[data-section="section-settings"]')?.addEventListener("click", () => {
+  if (_isMaster) {
+    loadPendingUsers();
+    loadTeacherNamesUI();
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  RECORD BANK — Auto-populate session dropdown
+// ══════════════════════════════════════════════════════════════
+async function loadRbSessions() {
+  const sel = $("rbSession");
+  if (!sel) return;
+  sel.innerHTML = `<option value="">Loading sessions...</option>`;
+  try {
+    // Fetch distinct sessions from attendance collection
+    const snap = await firestoreGetDocs(firestoreCollection(db, "attendance"));
+    const sessions = new Set();
+    snap.docs.forEach(d => { if (d.data().session) sessions.add(d.data().session); });
+
+    // Also check scores collection
+    const snapSc = await firestoreGetDocs(firestoreCollection(db, "scores"));
+    snapSc.docs.forEach(d => { if (d.data().session) sessions.add(d.data().session); });
+
+    const sorted = [...sessions].sort().reverse(); // most recent first
+    if (!sorted.length) {
+      sel.innerHTML = `<option value="">No sessions found</option>`;
+      return;
+    }
+    sel.innerHTML = `<option value="">Select session...</option>` +
+      sorted.map(s => `<option value="${s}">${s}</option>`).join("");
+
+    // Pre-select current session if available
+    const sessionData = await getSession();
+    if (sessionData.session && sessions.has(sessionData.session)) {
+      sel.value = sessionData.session;
+    }
+  } catch(e) {
+    sel.innerHTML = `<option value="">Error loading sessions</option>`;
+    console.error("loadRbSessions:", e);
+  }
+}
+
+document.querySelector('[data-section="section-recordbank"]')?.addEventListener("click", () => {
+  if (_isMaster) loadRbSessions();
+});
+
+// ══════════════════════════════════════════════════════════════
+//  STUDENT PROMOTION — Admin only
+// ══════════════════════════════════════════════════════════════
+let _promStudents = [];
+
+// Full promotion chain — maps each class to its next class
+const PROMOTION_CHAIN = {
+  "Creche":    "Nursery 1",
+  "Nursery 1": "Nursery 2",
+  "Nursery 2": "Nursery 3",
+  "Nursery 3": "Basic 1",
+  "Basic 1":   "Basic 2",
+  "Basic 2":   "Basic 3",
+  "Basic 3":   "Basic 4",
+  "Basic 4":   "Basic 5",
+  "Basic 5":   "JS 1",
+  "JS 1":      "JS 2",
+  "JS 2":      "JS 3",
+  "JS 3":      "SS 1",
+  "SS 1":      "SS 2",
+  "SS 2":      "SS 3",
+  "SS 3":      "GRADUATED"
+};
+
+// Auto-suggest next class when From class is selected
+$("promFromClass")?.addEventListener("change", function() {
+  var fromClass = this.value;
+  if (!fromClass) return;
+  var nextClass = PROMOTION_CHAIN[fromClass];
+  if (!nextClass) return;
+  if (nextClass === "GRADUATED") {
+    // SS 3 selected — show graduation notice
+    $("promToClass").value = "";
+    $("promToClass").disabled = true;
+    $("promToArm").disabled   = true;
+    var noticeBox = $("promGradNotice");
+    if (noticeBox) noticeBox.style.display = "block";
+  } else {
+    var noticeBox = $("promGradNotice");
+    if (noticeBox) noticeBox.style.display = "none";
+    $("promToClass").disabled = false;
+    $("promToArm").disabled   = false;
+    $("promToClass").value = nextClass;
+  }
+  updatePromSummary();
+});
+
+// Load students from selected class/arm
+$("loadPromStudentsBtn")?.addEventListener("click", async () => {
+  var cls  = $("promFromClass").value;
+  var arm  = $("promFromArm").value;
+  if (!cls) { toast("Select a class.", "error"); return; }
+  var classArm = cls + arm;
+  var isGraduation = PROMOTION_CHAIN[cls] === "GRADUATED";
+  var btn = $("loadPromStudentsBtn"); btn.disabled = true; btn.textContent = "Loading…";
+  try {
+    _promStudents = (await getStudentsByClassArm(classArm))
+      .sort(function(a,b){ return (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}); });
+    if (!_promStudents.length) { toast("No students found in " + classArm + ".", "warning"); return; }
+
+    // Build table
+    $("promStudentTbody").innerHTML = _promStudents.map(function(s) {
+      return "<tr>" +
+        "<td><input type='checkbox' class='prom-check' data-reg='" + s.regNumber + "' checked style='width:16px;height:16px'/></td>" +
+        "<td><strong>" + (s.regNumber||"—") + "</strong></td>" +
+        "<td>" + (s.fullName||"—") + "</td>" +
+        "<td>" + (s.gender||"—") + "</td>" +
+        "<td><span class='badge badge-primary'>" + classArm + "</span></td>" +
+        "<td><span class='badge " + (isGraduation ? "badge-success" : "badge-info") + "'>" +
+          (isGraduation ? "→ Graduated" : ("→ " + (PROMOTION_CHAIN[cls]||"?") + arm)) +
+        "</span></td>" +
+        "</tr>";
+    }).join("");
+
+    $("promStudentCount").textContent = _promStudents.length + " student(s)";
+    updatePromSummary();
+    $("promStudentsCard").style.display = "block";
+    $("promResultBox").style.display = "none";
+    toast(_promStudents.length + " student(s) loaded from " + classArm + ".", "success");
+  } catch(e) { toast(e.message, "error"); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-people-fill"></i> Load Students'; }
+});
+
+// Update summary text
+function updatePromSummary() {
+  var checked = document.querySelectorAll(".prom-check:checked").length;
+  var fromClass = $("promFromClass").value || "";
+  var isGraduation = PROMOTION_CHAIN[fromClass] === "GRADUATED";
+  var toLabel = isGraduation ? "Graduated (leave school)" :
+    (($("promToClass").value||"") + ($("promToArm").value||"") || "selected class");
+  $("promSummaryText").textContent = checked + " student(s) will be " +
+    (isGraduation ? "graduated from " + fromClass : "promoted to " + toLabel);
+}
+
+// Check all / Deselect all
+$("promCheckAll")?.addEventListener("change", function() {
+  document.querySelectorAll(".prom-check").forEach(function(cb) { cb.checked = this.checked; }.bind(this));
+  updatePromSummary();
+});
+$("promSelectAllBtn")?.addEventListener("click", function() {
+  document.querySelectorAll(".prom-check").forEach(function(cb) { cb.checked = true; });
+  $("promCheckAll").checked = true;
+  updatePromSummary();
+});
+$("promDeselectAllBtn")?.addEventListener("click", function() {
+  document.querySelectorAll(".prom-check").forEach(function(cb) { cb.checked = false; });
+  $("promCheckAll").checked = false;
+  updatePromSummary();
+});
+
+// Update summary when destination changes
+$("promToClass")?.addEventListener("change", updatePromSummary);
+$("promToArm")?.addEventListener("change", updatePromSummary);
+
+// Listen to individual checkboxes
+$("promStudentTbody")?.addEventListener("change", function(e) {
+  if (e.target.classList.contains("prom-check")) updatePromSummary();
+});
+
+// PROMOTE BUTTON
+$("promoteBtn")?.addEventListener("click", async () => {
+  if (!_isMaster) { toast("Only Admin can promote students.", "error"); return; }
+
+  var fromClass   = $("promFromClass").value;
+  var toClass     = $("promToClass").value;
+  var toArm       = $("promToArm").value;
+  var isGraduation = PROMOTION_CHAIN[fromClass] === "GRADUATED";
+
+  if (!isGraduation && !toClass) { toast("Select a destination class.", "error"); return; }
+
+  var toClassArm  = isGraduation ? "GRADUATED" : toClass + toArm;
+  var toClassBase = isGraduation ? "GRADUATED" : toClass;
+  var fromClassArm = fromClass + ($("promFromArm").value||"");
+
+  // Get selected students
+  var selectedRegs = [];
+  document.querySelectorAll(".prom-check:checked").forEach(function(cb) {
+    selectedRegs.push(cb.dataset.reg);
+  });
+  if (!selectedRegs.length) { toast("No students selected.", "error"); return; }
+
+  // Confirm
+  var confirmMsg = isGraduation
+    ? selectedRegs.length + " student(s) from " + fromClassArm + " will be marked as GRADUATED.\n\nThey will no longer appear in active class lists.\nAll their records (scores, attendance, results) are preserved forever.\n\nContinue?"
+    : selectedRegs.length + " student(s) will be moved from " + fromClassArm + " to " + toClassArm + ".\n\nAll past records are preserved.\n\nContinue?";
+  if (!confirm(confirmMsg)) return;
+
+  var btn = $("promoteBtn"); btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;margin-right:8px"></span> ' +
+    (isGraduation ? "Graduating…" : "Promoting…");
+
+  try {
+    var promoted = 0, graduated = 0, failed = 0, errors = [];
+
+    await Promise.all(selectedRegs.map(async function(reg) {
+      try {
+        if (isGraduation) {
+          // Graduate the student — preserves all data, marks as graduated
+          await graduateStudent(reg, _currentSession);
+          graduated++;
+        } else {
+          // Promote to next class
+          await updateStudent(reg, {
+            classBase: toClassBase,
+            arm:       toArm,
+            classArm:  toClassArm
+          });
+          promoted++;
+        }
+      } catch(e) {
+        failed++;
+        errors.push(reg + ": " + e.message);
+      }
+    }));
+
+    // Show result
+    var resultHtml = "<div class='card mb-3'><div class='card-body'>" +
+      "<div style='font-weight:900;font-size:1rem;margin-bottom:10px'>" +
+      "<i class='bi bi-check-circle-fill' style='color:var(--success)'></i> " +
+      (isGraduation ? "Graduation Complete" : "Promotion Complete") +
+      "</div>" +
+      "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px'>" +
+      (promoted > 0 ? "<div style='text-align:center;padding:14px;background:#d1fae5;border-radius:8px'>" +
+        "<div style='font-size:1.6rem;font-weight:900;color:#065f46'>" + promoted + "</div>" +
+        "<div style='font-size:.75rem;font-weight:700;color:#065f46'>Promoted ✅</div></div>" : "") +
+      (graduated > 0 ? "<div style='text-align:center;padding:14px;background:#ede9fe;border-radius:8px'>" +
+        "<div style='font-size:1.6rem;font-weight:900;color:#5b21b6'>" + graduated + "</div>" +
+        "<div style='font-size:.75rem;font-weight:700;color:#5b21b6'>Graduated 🎓</div></div>" : "") +
+      (failed > 0 ? "<div style='text-align:center;padding:14px;background:#fee2e2;border-radius:8px'>" +
+        "<div style='font-size:1.6rem;font-weight:900;color:#991b1b'>" + failed + "</div>" +
+        "<div style='font-size:.75rem;font-weight:700;color:#991b1b'>Failed ❌</div></div>" : "") +
+      "</div>" +
+      "<div style='font-size:.85rem;color:var(--text-muted)'>" +
+      (promoted > 0 ? "<strong>" + promoted + "</strong> student(s) moved from <strong>" + fromClassArm + "</strong> to <strong>" + toClassArm + "</strong>.<br>" : "") +
+      (graduated > 0 ? "<strong>" + graduated + "</strong> student(s) graduated. All their records are preserved in the system.<br>" : "") +
+      (failed > 0 ? "<span style='color:#dc2626'>Failed: " + errors.join(", ") + "</span>" : "") +
+      "</div></div></div>";
+
+    $("promResultBox").innerHTML = resultHtml;
+    $("promResultBox").style.display = "block";
+    await loadStudents();
+    toast(
+      isGraduation
+        ? graduated + " student(s) graduated successfully. Records preserved."
+        : promoted + " student(s) promoted to " + toClassArm + ".",
+      "success"
+    );
+
+  } catch(e) { toast(e.message, "error"); console.error(e); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-arrow-up-circle-fill"></i> ' + (isGraduation ? "Graduate Students" : "Promote Students");
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  ALUMNI & INACTIVE STUDENTS — Admin only
+// ══════════════════════════════════════════════════════════════
+var _currentAlumniTab = "graduated";
+
+window.loadAlumniTab = async function(tab) {
+  _currentAlumniTab = tab;
+
+  // Update tab button styles
+  ["alumniTabGrad","alumniTabTransfer","alumniTabInactive"].forEach(function(id) { 
+    var el = $(id); if(el) { el.className = "btn btn-outline btn-sm"; }
+  });
+  var activeId = tab === "graduated" ? "alumniTabGrad" : tab === "transferred" ? "alumniTabTransfer" : "alumniTabInactive";
+  var activeEl = $(activeId); if(activeEl) activeEl.className = "btn btn-primary btn-sm";
+
+  var tbody = $("alumniTable");
+  tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;padding:24px;color:var(--text-muted)'>Loading…</td></tr>";
+
+  try {
+    var students;
+    if (tab === "graduated")   students = await getAlumniStudents();
+    else if (tab === "transferred") {
+      var all = await getAllStudents();
+      students = all.filter(function(s){ return s.status === "transferred"; });
+    } else {
+      students = await getInactiveStudents();
+    }
+
+    $("alumniCount").textContent = students.length + " student(s)";
+
+    if (!students.length) {
+      tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;padding:30px;color:var(--text-muted)'>No " + tab + " students found.</td></tr>";
+      return;
+    }
+
+    tbody.innerHTML = students
+      .sort(function(a,b){ return (a.fullName||"").localeCompare(b.fullName||""); })
+      .map(function(s) {
+        var sessionLabel = s.graduationSession || s.transferSession || "—";
+        var statusTag = tab === "graduated"
+          ? "<span class='badge' style='background:#7c3aed;color:#fff'>Graduated 🎓</span>"
+          : tab === "transferred"
+          ? "<span class='badge badge-warning'>Transferred</span>"
+          : "<span class='badge badge-muted'>Removed</span>";
+        var actions =
+          // Restore button for inactive
+          (tab === "inactive"
+            ? "<button class='btn btn-outline btn-sm' onclick='restoreStudentAction(\"" + s.regNumber + "\")' style='font-size:.75rem'>" +
+              "<i class='bi bi-arrow-counterclockwise'></i> Restore</button>"
+            : "") +
+          // View Results button for all
+          " <button class='btn btn-outline btn-sm' onclick='viewAlumniResults(\"" + s.regNumber + "\")' style='font-size:.75rem'>" +
+          "<i class='bi bi-card-list'></i> View Results</button>";
+
+        return "<tr>" +
+          "<td><strong>" + (s.regNumber||"—") + "</strong></td>" +
+          "<td>" + (s.fullName||"—") + "</td>" +
+          "<td>" + (s.classArm||s.classBase||"—") + "</td>" +
+          "<td>" + (s.gender||"—") + "</td>" +
+          "<td>" + statusTag + "</td>" +
+          "<td>" + sessionLabel + "</td>" +
+          "<td>" + actions + "</td>" +
+          "</tr>";
+      }).join("");
+
+  } catch(e) { toast(e.message, "error"); console.error(e); }
+};
+
+// Restore a removed student back to active
+window.restoreStudentAction = async function(reg) {
+  if (!confirm("Restore " + reg + " as an active student?")) return;
+  try {
+    await restoreStudent(reg);
+    toast(reg + " restored to active students.", "success");
+    loadAlumniTab(_currentAlumniTab);
+    await loadStudents();
+  } catch(e) { toast(e.message, "error"); }
+};
+
+// View alumni results — navigate to Results tab with reg number pre-filled
+window.viewAlumniResults = function(reg) {
+  showSection("section-results");
+  var regInput = $("resRegNo");
+  if (regInput) { regInput.value = reg; }
+  toast("Enter the session and term then click Load Result.", "info");
+};
+
+// Load graduated tab by default when Alumni section opens
+document.querySelector('[data-section="section-alumni"]')?.addEventListener("click", function() {
+  loadAlumniTab("graduated");
+});
+
+// ══════════════════════════════════════════════════════════════
+//  RESULTS — Admin and Form Teachers only
+// ══════════════════════════════════════════════════════════════
+
+// Load sessions into resSession dropdown when Results section is opened
+document.querySelector('[data-section="section-results"]')?.addEventListener("click", async () => {
+  const sel = $("resSession");
+  if (!sel || sel.options.length > 1) return; // already loaded
+  sel.innerHTML = "<option value=''>Loading sessions...</option>";
+  try {
+    const snapAtt = await firestoreGetDocs(firestoreCollection(db, "attendance"));
+    const snapSc  = await firestoreGetDocs(firestoreCollection(db, "scores"));
+    const sessions = new Set();
+    snapAtt.docs.forEach(function(d){ if(d.data().session) sessions.add(d.data().session); });
+    snapSc.docs.forEach(function(d){ if(d.data().session) sessions.add(d.data().session); });
+    const sorted = [...sessions].sort().reverse();
+    if (!sorted.length) { sel.innerHTML = "<option value=''>No sessions found</option>"; return; }
+    sel.innerHTML = "<option value=''>Select session...</option>" +
+      sorted.map(function(s){ return "<option value='" + s + "'>" + s + "</option>"; }).join("");
+    // Pre-select current session
+    const sd = await getSession();
+    if (sd.session && sessions.has(sd.session)) sel.value = sd.session;
+  } catch(e) { sel.innerHTML = "<option value=''>Error loading sessions</option>"; }
+});
+
+// Grade helper
+function resGrade(total) {
+  if (total >= 80) return { g:"A", color:"#16a34a" };
+  if (total >= 60) return { g:"B", color:"#2563eb" };
+  if (total >= 50) return { g:"C", color:"#d97706" };
+  if (total >= 40) return { g:"D", color:"#ea580c" };
+  return { g:"F", color:"#dc2626" };
+}
+
+$("loadResultBtn")?.addEventListener("click", async () => {
+  const reg     = ($("resRegNo").value||"").trim().toUpperCase();
+  const session = $("resSession").value;
+  const term    = $("resTerm").value;
+
+  if (!reg)     { toast("Enter a registration number.", "error"); return; }
+  if (!session) { toast("Select an academic session.", "error"); return; }
+
+  const btn = $("loadResultBtn"); btn.disabled = true;
+  btn.innerHTML = "<span class='spinner' style='width:16px;height:16px;border-width:2px;display:inline-block;margin-right:6px'></span> Loading...";
+
+  try {
+    // Fetch student, scores and remark
+    const student = await getStudentByReg(reg);
+    if (!student) { toast("Student not found. Check the registration number.", "error"); return; }
+
+    const [scores, remark] = await Promise.all([
+      getScoresByStudentTerm(reg, term, session),
+      getRemarkByStudentTerm(reg, term, session)
+    ]);
+
+    // Filter scores by session — include old untagged + matching session
+    const sessionScores = scores.filter(function(s){ return !s.session || s.session === session; });
+
+    // Get classArm from scores (correct class when scores were entered)
+    // Falls back to current student classArm if no scores found yet
+    const scoreClassArm = sessionScores.length > 0 ? (sessionScores[0].classArm || student.classArm) : student.classArm;
+    const scoreClassBase = sessionScores.length > 0 ? (sessionScores[0].classBase || armToBase(student.classArm||"")) : armToBase(student.classArm||"");
+
+    // Student Info — class shown is from SCORES (correct historical class)
+    $("resStudentInfo").innerHTML = [
+      { lbl:"Full Name",   val: student.fullName||"—" },
+      { lbl:"Reg Number",  val: student.regNumber||"—" },
+      { lbl:"Class",       val: scoreClassArm + (scoreClassArm !== student.classArm ? " (now " + student.classArm + ")" : "") },
+      { lbl:"Gender",      val: student.gender||"—" },
+      { lbl:"Session",     val: session },
+      { lbl:"Term",        val: TERM_LABELS[term]||"—" }
+    ].map(function(c){
+      return "<div style='background:#f8fafc;border-radius:8px;padding:12px 14px;border:1px solid var(--border)'>" +
+        "<div style='font-size:.65rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:800'>" + c.lbl + "</div>" +
+        "<div style='font-weight:800;font-size:.95rem;margin-top:4px;color:var(--text)'>" + c.val + "</div>" +
+        "</div>";
+    }).join("");
+
+    // Load subjects using class from SCORES — correct historical class
+    const classSubjectsList = await getClassSubjects(scoreClassBase, term, session);
+
+    // Map uploaded scores by subject FIRST — needed for merge below
+    const subjectMap = {};
+    sessionScores.forEach(function(sc){ subjectMap[sc.subject] = sc; });
+
+    // Determine which subjects this student offers from classSubjects list
+    var offeredSubjects;
+    if (!student.subjectsOffered || student.subjectsOffered === "all") {
+      offeredSubjects = classSubjectsList.slice();
+    } else if (Array.isArray(student.subjectsOffered)) {
+      offeredSubjects = classSubjectsList.filter(function(s){
+        return student.subjectsOffered.includes(s);
+      });
+    } else {
+      offeredSubjects = classSubjectsList.slice();
+    }
+
+    // CRITICAL FIX: Always merge with subjects found in uploaded scores
+    // This handles cases where a subject has a score but is missing from classSubjects doc
+    // (e.g. subject added to score entry directly, or classSubjects doc is incomplete)
+    Object.keys(subjectMap).forEach(function(sub) {
+      if (!offeredSubjects.includes(sub)) {
+        offeredSubjects.push(sub);
+      }
+    });
+
+    // Sort alphabetically
+    offeredSubjects.sort();
+
+    if (!offeredSubjects.length) {
+      $("resScoreTbody").innerHTML = "<tr><td colspan='6' style='text-align:center;padding:24px;color:var(--text-muted)'>No subjects found for this student.</td></tr>";
+      $("resSummaryCards").innerHTML = "";
+      $("resRemarkBox").innerHTML = "";
+      $("resultDisplay").style.display = "block";
+      return;
+    }
+
+    // Build scores table — show _ for subjects without scores yet
+    var grandTotal = 0;
+    var scoredCount = 0;
+    var totalObtainable = offeredSubjects.length * 100;
+    $("resScoreTbody").innerHTML = offeredSubjects.map(function(sub){
+      const sc = subjectMap[sub];
+      if (!sc) {
+        // No scores uploaded yet — show dashes
+        return "<tr>" +
+          "<td style='font-weight:700'>" + sub + "</td>" +
+          "<td style='text-align:center;color:var(--text-muted)'>_</td>" +
+          "<td style='text-align:center;color:var(--text-muted)'>_</td>" +
+          "<td style='text-align:center;color:var(--text-muted)'>_</td>" +
+          "<td style='text-align:center;color:var(--text-muted)'>_</td>" +
+          "<td style='text-align:center;color:var(--text-muted)'>_</td>" +
+          "</tr>";
+      }
+      const t1    = sc.test1||0, t2 = sc.test2||0, ex = sc.exam||0;
+      const total = t1 + t2 + ex;
+      const gr    = resGrade(total);
+      grandTotal += total;
+      scoredCount++;
+      return "<tr>" +
+        "<td style='font-weight:700'>" + sub + "</td>" +
+        "<td style='text-align:center'>" + t1 + "</td>" +
+        "<td style='text-align:center'>" + t2 + "</td>" +
+        "<td style='text-align:center'>" + ex + "</td>" +
+        "<td style='text-align:center;font-weight:900'>" + total + "</td>" +
+        "<td style='text-align:center;font-weight:900;color:" + gr.color + "'>" + gr.g + "</td>" +
+        "</tr>";
+    }).join("");
+
+    // Calculate position in class arm
+    const armStudents = await getStudentsByClassArm(student.classArm);
+    const allTotals   = await Promise.all(armStudents.map(async function(s){
+      const sc  = await getScoresByStudentTerm(s.regNumber, term, session);
+      const tot = sc.reduce(function(sum,r){ return sum+(r.test1||0)+(r.test2||0)+(r.exam||0); }, 0);
+      return { reg: s.regNumber, total: tot };
+    }));
+    const sorted  = allTotals.sort(function(a,b){ return b.total - a.total; });
+    const posIdx  = sorted.findIndex(function(s){ return s.reg === reg; });
+    const posStr  = posIdx >= 0 ? ordinal(posIdx + 1) : "—";
+    // Average = total scores ÷ number of subjects offered (not percentage)
+    const avg = offeredSubjects.length > 0 ? (grandTotal / offeredSubjects.length).toFixed(1) : "0";
+
+    // Summary cards
+    $("resSummaryCards").innerHTML = [
+      { lbl:"Overall Total",      val: grandTotal + " / " + totalObtainable, color:"#4f46e5" },
+      { lbl:"Average Score",      val: avg,                                  color:"#059669" },
+      { lbl:"Position in Class",  val: posStr,                               color:"#d97706" },
+      { lbl:"Subjects Offered",   val: offeredSubjects.length + " (" + scoredCount + " scored)", color:"#0891b2" }
+    ].map(function(c){
+      return "<div style='text-align:center;padding:16px;background:" + c.color + "18;border-radius:10px;border:1.5px solid " + c.color + "44'>" +
+        "<div style='font-size:.62rem;text-transform:uppercase;font-weight:800;color:" + c.color + ";letter-spacing:.5px'>" + c.lbl + "</div>" +
+        "<div style='font-size:1.4rem;font-weight:900;color:" + c.color + ";margin-top:6px'>" + c.val + "</div>" +
+        "</div>";
+    }).join("");
+
+    // Remark
+    const remarkText = remark && remark.remark ? remark.remark : "No remark entered yet.";
+    $("resRemarkBox").innerHTML =
+      "<span style='font-size:.72rem;text-transform:uppercase;font-weight:800;color:var(--text-muted);letter-spacing:.5px'>Form Teacher's Remark</span>" +
+      "<div style='font-style:italic;color:var(--text);margin-top:6px;font-size:.9rem'>" + remarkText + "</div>";
+
+    $("resultDisplay").style.display = "block";
+    toast("Result loaded for " + student.fullName + ".", "success");
+
+  } catch(e) { toast(e.message, "error"); console.error(e); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = "<i class='bi bi-search'></i> Load Result";
+  }
 });
