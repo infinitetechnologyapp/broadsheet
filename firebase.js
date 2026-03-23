@@ -9,7 +9,8 @@ import { getFirestore, collection, doc,
          enableIndexedDbPersistence }             from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword,
          createUserWithEmailAndPassword,
-         signOut, onAuthStateChanged }             from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+         signOut, onAuthStateChanged,
+         browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey:            "AIzaSyDhZXnadVZku6W0QI9Le4lyOUiijrbILM4",
@@ -27,6 +28,13 @@ export const firestoreGetDoc = getDoc;
 export const firestoreCollection = collection;
 export const firestoreGetDocs    = getDocs;
 const auth = getAuth(app);
+
+// Set Auth persistence to LOCAL — user stays logged in
+// even after closing the browser or losing internet briefly
+// This is the key fix for the repeated logout problem
+setPersistence(auth, browserLocalPersistence).catch(function(err) {
+  console.warn("Auth persistence not set:", err);
+});
 
 // Enable offline persistence — auth + data loads from cache on poor network
 enableIndexedDbPersistence(db).catch(function(err) {

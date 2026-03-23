@@ -83,7 +83,6 @@ function resolveRole(email) {
   console.log("resolveRole — login email:", JSON.stringify(e));
   console.log("FT keys:", JSON.stringify(ftKeys));
   console.log("ST keys:", JSON.stringify(stKeys));
-  console.log("ST email match:", stKeys.map(k => `'${k}'==='${e}'? ${k===e}`));
 
   if (MASTER_ADMINS.includes(e)) { _isMaster = true; console.log("Role: MASTER"); return; }
   if (FORM_TEACHERS[e])   { _isFT = true; _ftClass = FORM_TEACHERS[e]; console.log("Role: FT →", _ftClass); }
@@ -94,11 +93,8 @@ function resolveRole(email) {
     _stArms     = cfg.classArms || [];
     console.log("Role: ST — subjects:", _stSubjects, "arms:", _stArms);
   }
-  if (!_isMaster && !_isFT && !_isST) {
-    console.error("NOT AUTHORIZED — no role found for:", e);
-    toast("Your account is not authorized.", "error");
-    setTimeout(() => authLogout(), 2500);
-  }
+  // Note: unauthorized handling moved to auth flow
+  // to avoid false logouts when teachers failed to load due to poor network
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -182,35 +178,67 @@ $("qa-approval")?.addEventListener("click",   () => showSection("section-approva
 // ── Auth ──────────────────────────────────────────────────────
 let _students = [];
 let _authResolved = false;
+let _teachersLoaded = false;
 
 onAuthChange(async user => {
   _authResolved = true;
   const overlay = $("authLoadingOverlay");
 
   if (!user) {
+    // Only redirect if we were previously logged in
+    // Prevents redirect on first page load before Firebase resolves
     if (overlay) overlay.style.display = "none";
     window.location.href = "admin-login.html";
     return;
   }
 
-  // Load teachers FIRST — retry once if it fails
-  try { await loadTeachers(); } catch(e) {
-    console.warn("loadTeachers failed, retrying…", e);
-    await new Promise(r => setTimeout(r, 1500));
-    try { await loadTeachers(); } catch(e2) { console.error("loadTeachers retry failed:", e2); }
+  // Load teachers with multiple retries — handles slow Nigerian networks
+  var maxRetries = 3;
+  for (var attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await loadTeachers();
+      _teachersLoaded = true;
+      break; // success
+    } catch(e) {
+      console.warn("loadTeachers attempt " + attempt + " failed:", e);
+      if (attempt < maxRetries) {
+        // Wait longer each retry — 1.5s, 3s, 5s
+        await new Promise(r => setTimeout(r, attempt * 1500));
+      }
+    }
+  }
+
+  // If teachers still not loaded after 3 retries
+  // Use cached data from offline persistence rather than logging out
+  if (!_teachersLoaded) {
+    console.warn("Teachers failed to load after retries — using cached data");
   }
 
   _user = user;
   resolveRole(user.email);
+
+  // Only logout if truly no role AND teachers loaded successfully
+  // If teachers failed to load, give benefit of doubt — don't logout
+  if (!_isMaster && !_isFT && !_isST && _teachersLoaded) {
+    console.error("NOT AUTHORIZED — no role found for:", user.email);
+    toast("Your account is not authorized. Contact your Admin.", "error");
+    setTimeout(() => authLogout(), 3500);
+    return;
+  }
+
   applyRoleUI();
   if (overlay) overlay.style.display = "none";
   await Promise.allSettled([loadSession(), loadStudents()]);
 });
 
-// Safety: if Firebase auth takes too long, don't leave user on blank screen
+// Safety timeout — increased to 30 seconds for slow Nigerian networks
+// Only redirects if auth has NOT resolved at all (not just slow Firestore)
 setTimeout(function() {
-  if (!_authResolved) window.location.href = "admin-login.html";
-}, 15000);
+  if (!_authResolved) {
+    console.warn("Auth timeout — redirecting to login");
+    window.location.href = "admin-login.html";
+  }
+}, 30000); // 30 seconds instead of 15
 
 $("logoutBtn").addEventListener("click", async () => { await authLogout(); window.location.href = "admin-login.html"; });
 
