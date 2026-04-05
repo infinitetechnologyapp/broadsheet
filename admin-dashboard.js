@@ -494,7 +494,7 @@ async function loadTeachers() {
 
 // School identity state
 let _schoolName  = "Recomella Academy";
-let _schoolLogo  = "./logo.png";
+let _schoolLogo  = "./schlogo.png";
 let _currentSession = "";  // always holds the active session
 // Grading system — loaded from Firebase settings, used across broadsheet and score entry
 let _grading = { A:"86-100", B1:"71-85", B2:"61-70", C:"50-60", D:"39-49", F:"0-38" };
