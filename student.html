@@ -13,7 +13,7 @@
       justify-content:space-between; gap:10px; flex-wrap:wrap;
       position:sticky; top:0; z-index:100;
     }
-    #app { padding:16px; max-width:900px; margin:0 auto; }
+    #app { padding:14px; max-width:900px; margin:0 auto; }
     .hidden { display:none !important; }
     .spinner {
       width:36px; height:36px; border:4px solid #e2e8f0;
@@ -22,185 +22,236 @@
     }
     @keyframes spin { to { transform:rotate(360deg); } }
 
-    /* ═══════════════════════════════════════════════════
-       REPORT CARD — Full A4 210mm × 297mm
-       Fonts increased for good readability on print
-    ═══════════════════════════════════════════════════ */
+    /* ═══════════════════════════════════════════════════════
+       REPORT CARD
+       Target: fits one A4 page (210mm × 297mm)
+       Strategy:
+         - Card = exactly 210mm wide, NO min-height (no forced overflow)
+         - @page margin = 0, card padding handles all whitespace
+         - All fonts compact but readable
+         - Subject col: overflow hidden, no wrap — never breaks to new line
+         - Logo: larger, positioned to lap over the info box below
+    ═══════════════════════════════════════════════════════ */
     #reportCard {
       background:#fff;
       width:210mm;
-      height:297mm;
+      /* NO min-height — let content fit naturally into one page */
       margin:0 auto;
-      padding:10mm 12mm;
+      padding:6mm 8mm 5mm 8mm;
       box-sizing:border-box;
-      box-shadow:0 4px 28px rgba(0,0,0,.12);
+      box-shadow:0 4px 28px rgba(0,0,0,.1);
       font-family:Arial,Helvetica,sans-serif;
-      font-size:8.5pt;
+      font-size:7.5pt;
       color:#000;
+      position:relative;
     }
 
-    /* HEADER */
+    /* ── HEADER ── */
     .rc-header {
-      display:flex; align-items:flex-start; gap:10px;
-      border-bottom:2.5px solid #1E40AF; padding-bottom:6px; margin-bottom:5px;
+      display:flex; align-items:flex-start; gap:0;
+      border-bottom:2px solid #1E40AF;
+      padding-bottom:4px;
+      margin-bottom:0;          /* logo laps over what follows */
+      position:relative;
     }
-    .rc-logo { width:55px; height:55px; object-fit:contain; flex-shrink:0; }
+    /* Logo: larger, overlaps the info box below via negative margin */
+    .rc-logo {
+      width:68px; height:68px; object-fit:contain; flex-shrink:0;
+      position:relative; z-index:2;
+      margin-bottom:-18px;      /* lap amount — logo bleeds into info box */
+    }
     .rc-logo-placeholder {
-      width:55px; height:55px; border:2px solid #1E40AF; border-radius:5px;
+      width:68px; height:68px; border:2px solid #1E40AF; border-radius:5px;
       display:flex; align-items:center; justify-content:center;
-      font-size:1.1rem; font-weight:900; color:#1E40AF; flex-shrink:0; background:#fff;
+      font-size:1.3rem; font-weight:900; color:#1E40AF; flex-shrink:0;
+      background:#fff; position:relative; z-index:2;
+      margin-bottom:-18px;
     }
-    .rc-school-info { flex:1; margin-left: 22px; }
+    .rc-school-info { flex:1; padding-left:8px; }
     .rc-school-name {
-      font-size:16pt; font-weight:900; color:#1E40AF;
-      letter-spacing:.4px; line-height:1.15; text-transform:uppercase;
+      font-size:13pt; font-weight:900; color:#1E40AF;
+      letter-spacing:.3px; line-height:1.1; text-transform:uppercase;
     }
-    .rc-school-sub { font-size:7.5pt; color:#000; margin-top:2px; line-height:1.5; }
+    .rc-school-sub {
+      font-size:6.5pt; color:#000; margin-top:1px; line-height:1.35;
+    }
 
-    /* REPORT TITLE */
+    /* ── REPORT TITLE ── */
     .rc-report-title {
-      text-align:center; font-size:9.5pt; font-weight:900;
-      text-transform:uppercase; letter-spacing:.8px;
-      border:1.5px solid #1E40AF; padding:3px 8px;
-      margin:4px 0; color:#1E40AF; background:#fff;
+      text-align:center; font-size:8pt; font-weight:900;
+      text-transform:uppercase; letter-spacing:.6px;
+      border:1.5px solid #1E40AF; padding:2px 5px;
+      margin:3px 0 2px; color:#1E40AF; background:#fff;
     }
 
-    /* SESSION / TERM LINE */
+    /* ── SESSION/TERM LINE ── */
     .rc-session-line {
       display:flex; justify-content:space-between;
-      font-size:8.5pt; font-weight:800; margin-bottom:4px;
+      font-size:7pt; font-weight:800; margin-bottom:2px;
     }
 
-    /* STUDENT INFO — 3 columns */
+    /* ── STUDENT INFO — 3 columns, logo laps over left edge ── */
     .rc-info-box {
-      border:1.5px solid #1E40AF; border-radius:3px;
-      padding:4px 8px; margin-bottom:4px;
+      border:1.5px solid #1E40AF; border-radius:2px;
+      padding:3px 6px 3px 6px;
+      margin-bottom:3px;
+      /* left padding extra to clear the lapping logo */
+      padding-left:76px;
       display:grid; grid-template-columns:1fr 1fr 1fr;
-      gap:3px 14px; font-size:8pt; background:#fff;
+      gap:2px 10px; font-size:7pt; background:#fff;
+      position:relative; z-index:1;
     }
-    .rc-info-row { display:flex; gap:5px; align-items:baseline; }
-    .rc-info-label { font-weight:800; white-space:nowrap; color:#1E40AF; font-size:7.5pt; }
+    /* Name row spans full width */
+    .rc-info-row { display:flex; gap:3px; align-items:baseline; }
+    .rc-info-label {
+      font-weight:800; white-space:nowrap; color:#1E40AF; font-size:6.5pt;
+    }
     .rc-info-value {
       border-bottom:1px solid #94a3b8; flex:1;
-      font-weight:700; padding-bottom:1px; min-width:40px;
+      font-weight:700; padding-bottom:0; min-width:28px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
     .rc-info-full { grid-column:1/-1; }
 
-    /* SECTION TITLES */
+    /* ── SECTION TITLES ── */
     .rc-section-title {
-      font-size:8pt; font-weight:900; text-transform:uppercase;
+      font-size:6.5pt; font-weight:900; text-transform:uppercase;
       border:1.5px solid #1E40AF; color:#1E40AF; background:#fff;
-      padding:2px 7px; margin:4px 0 0; letter-spacing:.4px;
+      padding:1px 5px; margin:2px 0 0; letter-spacing:.3px;
     }
 
-    /* SCORE TABLE */
-    .rc-table { width:100%; border-collapse:collapse; font-size:8pt; margin-bottom:2px; }
+    /* ── SCORE TABLE — 70% column ── */
+    .rc-table { width:100%; border-collapse:collapse; font-size:7pt; margin-bottom:0; }
     .rc-table th {
       background:#1E40AF; color:#fff; font-weight:800;
-      text-align:center; padding:3px 2px;
-      border:1px solid #1e3a8a; font-size:7.5pt;
+      text-align:center; padding:2px 1px;
+      border:1px solid #1e3a8a; font-size:6.5pt; line-height:1.2;
     }
-    .rc-table th.subj-col { text-align:left; width:36%; }
+    .rc-table th.subj-col { text-align:left; width:38%; }
     .rc-table td {
-      border:1px solid #94a3b8; padding:2px 3px;
-      text-align:center; font-size:8pt; background:#fff;
+      border:1px solid #cbd5e1; padding:1px 2px;
+      text-align:center; font-size:7pt; background:#fff; line-height:1.2;
     }
-    .rc-table td.subj-name { text-align:left; font-weight:700; padding-left:4px; }
+    .rc-table td.subj-name {
+      text-align:left; font-weight:700; padding-left:3px;
+      /* NEVER break subject name to new line */
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      max-width:0;        /* forces ellipsis within the % width */
+    }
     .rc-table .grade-cell { font-weight:900; color:#1E40AF; }
 
-    /* AFFECTIVE & PSYCHOMOTOR TRAITS */
-    .rc-trait-table { width:100%; border-collapse:collapse; font-size:7.5pt; }
+    /* ── TRAITS TABLE — 30% column ── */
+    .rc-trait-table { width:100%; border-collapse:collapse; font-size:6pt; }
     .rc-trait-table th {
-      background:#1E40AF; color:#fff; padding:2px 3px;
-      border:1px solid #1e3a8a; font-size:7pt; text-align:center;
+      background:#1E40AF; color:#fff; padding:2px 2px;
+      border:1px solid #1e3a8a; font-size:6pt; text-align:center; line-height:1.2;
     }
-    .rc-trait-table th.trait-label { text-align:left; }
+    .rc-trait-table th.trait-label { text-align:left; width:62%; }
     .rc-trait-table td {
-      border:1px solid #94a3b8; padding:2px 3px;
-      text-align:center; font-size:7.5pt; background:#fff;
+      border:1px solid #cbd5e1; padding:1px 2px;
+      text-align:center; font-size:6pt; background:#fff; line-height:1.2;
     }
-    .rc-trait-table td.trait-name { text-align:left; font-weight:700; }
-    .tick-cell { font-weight:900; color:#1E40AF; font-size:9pt; }
+    .rc-trait-table td.trait-name {
+      text-align:left; font-weight:700;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:0;
+    }
+    .tick-cell { font-weight:900; color:#1E40AF; font-size:8pt; }
 
-    /* SUMMARY */
+    /* ── SUMMARY ── */
     .rc-summary {
-      border:1.5px solid #1E40AF; border-radius:3px;
-      padding:4px 8px; margin-bottom:4px;
+      border:1.5px solid #1E40AF; border-radius:2px;
+      padding:3px 6px; margin-bottom:3px;
       display:grid; grid-template-columns:1fr 1fr;
-      gap:3px 14px; font-size:8pt; background:#fff;
+      gap:2px 10px; font-size:7pt; background:#fff;
     }
-    .rc-sum-row { display:flex; gap:5px; align-items:baseline; }
-    .rc-sum-label { font-weight:800; white-space:nowrap; color:#1E40AF; font-size:7.5pt; }
+    .rc-sum-row { display:flex; gap:3px; align-items:baseline; }
+    .rc-sum-label {
+      font-weight:800; white-space:nowrap; color:#1E40AF; font-size:6.5pt;
+    }
     .rc-sum-value {
-      border-bottom:1px solid #94a3b8; flex:1;
-      font-weight:700; padding-bottom:1px;
+      border-bottom:1px solid #94a3b8; flex:1; font-weight:700; padding-bottom:0;
     }
 
-    /* REMARKS */
-    .rc-remarks-row { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:4px; }
-    .rc-remark-box { border:1.5px solid #1E40AF; border-radius:3px; padding:4px 8px; background:#fff; }
+    /* ── REMARKS ── */
+    .rc-remarks-row {
+      display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:3px;
+    }
+    .rc-remark-box {
+      border:1.5px solid #1E40AF; border-radius:2px; padding:3px 5px; background:#fff;
+    }
     .rc-remark-title {
-      font-size:7.5pt; font-weight:900; text-transform:uppercase;
-      color:#1E40AF; margin-bottom:3px;
-      border-bottom:1px solid #1E40AF; padding-bottom:2px;
+      font-size:6.5pt; font-weight:900; text-transform:uppercase;
+      color:#1E40AF; margin-bottom:2px;
+      border-bottom:1px solid #1E40AF; padding-bottom:1px;
     }
     .rc-remark-text {
-      font-size:8pt; min-height:22px;
+      font-size:7pt; min-height:18px;
       border-bottom:1px solid #94a3b8;
-      margin-bottom:6px; padding-bottom:1px; line-height:1.4;
+      margin-bottom:4px; padding-bottom:1px; line-height:1.3;
     }
     .rc-sig-line {
-      display:flex; gap:6px; align-items:flex-end;
-      font-size:7.5pt; font-weight:700; color:#000;
+      display:flex; gap:4px; align-items:flex-end;
+      font-size:6.5pt; font-weight:700; color:#000;
     }
-    .rc-sig-underline { flex:1; border-bottom:1px solid #000; margin-bottom:0; }
+    .rc-sig-underline { flex:1; border-bottom:1px solid #000; }
 
-    /* GRADING KEY + STAMP */
-    .rc-bottom-row { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:4px; }
-    .rc-grading-box { border:1.5px solid #1E40AF; border-radius:3px; padding:4px 8px; background:#fff; }
-    .rc-grading-title {
-      font-size:7.5pt; font-weight:900; text-transform:uppercase;
-      color:#1E40AF; margin-bottom:3px;
-      border-bottom:1px solid #1E40AF; padding-bottom:2px; text-align:center;
+    /* ── GRADING KEY + STAMP ── */
+    .rc-bottom-row {
+      display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:3px;
     }
-    .rc-grade-row { display:flex; gap:5px; font-size:7.5pt; align-items:baseline; margin-bottom:2px; }
-    .rc-grade-letter { font-weight:900; color:#1E40AF; width:14px; }
-    .rc-grade-label  { font-weight:700; width:58px; }
+    .rc-grading-box {
+      border:1.5px solid #1E40AF; border-radius:2px; padding:3px 5px; background:#fff;
+    }
+    .rc-grading-title {
+      font-size:6.5pt; font-weight:900; text-transform:uppercase;
+      color:#1E40AF; margin-bottom:2px;
+      border-bottom:1px solid #1E40AF; padding-bottom:1px; text-align:center;
+    }
+    .rc-grade-row {
+      display:flex; gap:4px; font-size:6.5pt; align-items:baseline; margin-bottom:1px;
+    }
+    .rc-grade-letter { font-weight:900; color:#1E40AF; width:13px; }
+    .rc-grade-label  { font-weight:700; width:52px; }
     .rc-grade-range  { color:#000; }
     .rc-stamp-box {
-      border:1.5px dashed #94a3b8; border-radius:3px;
+      border:1.5px dashed #94a3b8; border-radius:2px;
       display:flex; align-items:center; justify-content:center;
-      min-height:72px; color:#94a3b8; font-size:8pt; font-weight:700; text-align:center;
-      background:#fff;
+      min-height:52px; color:#94a3b8; font-size:7pt; font-weight:700;
+      text-align:center; background:#fff;
     }
 
-    /* NOTE + FOOTER */
+    /* ── NOTE + FOOTER ── */
     .rc-note {
-      font-size:7pt; text-align:center; color:#000;
+      font-size:6pt; text-align:center; color:#000;
       font-style:italic; border-top:1px solid #e2e8f0;
-      padding-top:3px; margin-bottom:3px;
+      padding-top:2px; margin-bottom:2px;
     }
     .rc-footer {
       display:flex; justify-content:space-between; align-items:center;
-      font-size:7pt; color:#555;
-      border-top:1px solid #e2e8f0; padding-top:2px;
+      font-size:6pt; color:#555;
+      border-top:1px solid #e2e8f0; padding-top:1px;
     }
 
-    /* ═══════════════════════════════════════════════════
-       PRINT — exact A4 210×297mm, zero page margins
-       All margins handled by the card's own padding
-    ═══════════════════════════════════════════════════ */
+    /* ═══════════════════════════════════════════════════════
+       PRINT
+       @page margin:0 — card padding (6mm 8mm) handles all space
+       max-height:297mm + overflow:hidden = hard stop at page boundary
+       No min-height so content never forces a second page
+    ═══════════════════════════════════════════════════════ */
     @media print {
-      body { background:#fff !important; padding:0; margin:0; }
+      body { background:#fff !important; padding:0 !important; margin:0 !important; }
       .screen-bar { display:none !important; }
-      #app { padding:0; max-width:none; }
+      #app { padding:0 !important; max-width:none !important; }
       #loadingState, #notApprovedState, #errorState { display:none !important; }
       #reportCard {
         box-shadow:none !important;
-        margin:0;
-        padding:10mm 12mm;
-        width:210mm;
-        height:297mm;
+        margin:0 !important;
+        padding:6mm 8mm 5mm 8mm !important;
+        width:210mm !important;
+        max-height:297mm !important;  /* hard A4 ceiling */
+        overflow:hidden !important;   /* nothing escapes the page */
+        page-break-after:avoid !important;
+        page-break-inside:avoid !important;
       }
       @page {
         size:210mm 297mm;
@@ -258,7 +309,7 @@
     </div>
 
     <div class="rc-report-title" id="rcReportTitle">PROGRESS REPORT</div>
-    <div style="display:flex;justify-content:space-between;font-size:7.5pt;font-weight:800;margin-bottom:2px">
+    <div class="rc-session-line">
       <span>SESSION: <span id="rcSession" style="color:#1E40AF">—</span></span>
       <span>TERM: <span id="rcTerm" style="color:#1E40AF">—</span></span>
     </div>
@@ -295,9 +346,9 @@
       </div>
     </div>
 
-    <!-- SCORE TABLE + TRAITS SIDE BY SIDE -->
+    <!-- SCORE TABLE + TRAITS SIDE BY SIDE — 70% / 30% -->
     <div class="rc-section-title">Academic Performance &amp; Traits</div>
-    <div style="display:grid;grid-template-columns:58% 42%;gap:4px;margin-bottom:3px">
+    <div style="display:grid;grid-template-columns:70% 30%;gap:3px;margin-bottom:3px">
 
       <!-- LEFT: SCORE TABLE -->
       <div>
@@ -377,7 +428,7 @@
         <div class="rc-remark-title">Class Teacher's Remarks</div>
         <div class="rc-remark-text" id="rcRemark">—</div>
         <div class="rc-sig-line"><span>Signature:</span><span class="rc-sig-underline"></span></div>
-        <div class="rc-sig-line" style="margin-top:5px">
+        <div class="rc-sig-line" style="margin-top:3px">
           <span>Date:</span><span class="rc-sig-underline" id="rcClosingDate"></span>
         </div>
       </div>
@@ -385,7 +436,7 @@
         <div class="rc-remark-title" id="rcHodTitle">Principal's Remarks</div>
         <div class="rc-remark-text" id="rcHodRemark">—</div>
         <div class="rc-sig-line"><span>Signature:</span><span class="rc-sig-underline"></span></div>
-        <div class="rc-sig-line" style="margin-top:5px">
+        <div class="rc-sig-line" style="margin-top:3px">
           <span>Date:</span><span class="rc-sig-underline" id="rcHodDate"></span>
         </div>
       </div>
