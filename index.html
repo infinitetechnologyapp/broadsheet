@@ -14,10 +14,10 @@
   <div class="index-card">
 
     <!-- Logo -->
-    <div class="index-logo"><img src="schoolNova2.png" alt="SN" /></div>
+    <div class="index-logo"><img src="schoolNova2.png" alt="SchoolNova" /></div>
     <h2 style="text-align:center;font-size:1.5rem;margin-bottom:4px">SchoolNova</h2>
     <p style="text-align:center;color:var(--text-muted);font-size:.88rem;margin-bottom:28px">
-      Keeping Records that Last Forever
+      Building Records that Last Forever
     </p>
 
     <!-- Student Result Checker -->
@@ -33,6 +33,17 @@
           <label class="form-label">Registration Number</label>
           <input type="text" id="studentRegInput" class="form-control"
             placeholder="" style="text-transform:uppercase"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Academic Session</label>
+          <div id="currentSessionDisplay" style="
+            background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:6px;
+            padding:8px 12px;font-weight:800;font-size:.9rem;color:#1E40AF;
+            display:flex;align-items:center;gap:8px">
+            <i class="bi bi-calendar3"></i>
+            <span id="currentSessionText">Loading…</span>
+          </div>
+          <small style="color:var(--text-muted);font-size:.74rem">Results are for the current active session set by Admin</small>
         </div>
         <div class="form-group">
           <label class="form-label">Term</label>
@@ -149,7 +160,7 @@
     </div>
 
     <p style="text-align:center;font-size:.72rem;color:var(--text-muted);margin-top:20px">
-      &copy; 2026 SchoolNova by Brightest Digital Services. All rights reserved.
+      &copy; 2024 SchoolNova by Brightest Digital Services. All rights reserved.
     </p>
 
   </div>
@@ -164,10 +175,19 @@ const errBox    = document.getElementById("studentCheckError");
 const errMsg    = document.getElementById("studentCheckErrMsg");
 const checkBtn  = document.getElementById("checkResultBtn");
 
-// Auto-select current term set by admin
+// Load current session + term set by Admin — show to student
+let _currentSession = "";
 getSession().then(s => {
+  _currentSession = s.session || "";
+  // Show current session clearly
+  const display = document.getElementById("currentSessionText");
+  if (display) display.textContent = _currentSession || "Not set";
+  // Auto-select current term
   if (s.currentTerm) termInput.value = s.currentTerm;
-}).catch(() => {});
+}).catch(() => {
+  const display = document.getElementById("currentSessionText");
+  if (display) display.textContent = "Could not load";
+});
 
 function showErr(msg) {
   errMsg.textContent = msg;
@@ -182,6 +202,7 @@ checkBtn.addEventListener("click", async () => {
   const term = termInput.value;
   if (!reg)  { showErr("Please enter your registration number."); return; }
   if (!term) { showErr("Please select a term."); return; }
+  if (!_currentSession) { showErr("Session not loaded yet. Please wait a moment and try again."); return; }
 
   checkBtn.disabled = true;
   checkBtn.innerHTML = '<span class="spinner" style="width:18px;height:18px;border-width:2px"></span> Checking…';
@@ -189,7 +210,10 @@ checkBtn.addEventListener("click", async () => {
   try {
     const student = await getStudentByReg(reg);
     if (!student) { showErr("Registration number not found. Please check and try again."); return; }
-    window.location.href = "student.html?reg=" + encodeURIComponent(reg) + "&term=" + term;
+    // Pass session in URL so student.js uses exact session — no guessing
+    window.location.href = "student.html?reg=" + encodeURIComponent(reg)
+      + "&term=" + term
+      + "&session=" + encodeURIComponent(_currentSession);
   } catch(e) {
     showErr("Could not connect. Please try again.");
     console.error(e);

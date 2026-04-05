@@ -223,6 +223,25 @@ export async function saveScore(data) {
   var id = (data.regNumber + "_" + data.subject + "_" + data.term + (sessionPart ? "_" + sessionPart : "")).replace(/\s+/g, "_");
   await setDoc(doc(db, "scores", id), { ...data, updatedAt: serverTimestamp() }, { merge: true });
 }
+
+// BATCH SCORE SAVE — saves all students scores in ONE atomic commit
+// All save or none save — no partial uploads on network failure
+// Same write count as individual saves but one network round trip
+export async function saveScoresBatch(scoresArray) {
+  if (!scoresArray || !scoresArray.length) return;
+  // Firestore batch limit is 500 ops — chunk if needed
+  var chunkSize = 490;
+  for (var i = 0; i < scoresArray.length; i += chunkSize) {
+    var chunk = scoresArray.slice(i, i + chunkSize);
+    var batch = writeBatch(db);
+    chunk.forEach(function(data) {
+      var sessionPart = (data.session || "").replace(/\//g, "-").replace(/\s+/g, "_");
+      var id = (data.regNumber + "_" + data.subject + "_" + data.term + (sessionPart ? "_" + sessionPart : "")).replace(/\s+/g, "_");
+      batch.set(doc(db, "scores", id), Object.assign({}, data, { updatedAt: serverTimestamp() }), { merge: true });
+    });
+    await batch.commit();
+  }
+}
 export async function deleteScoreById(id) {
   await deleteDoc(doc(db, "scores", id));
 }
@@ -303,17 +322,37 @@ export async function tagAllUntaggedScores(session) {
   return { tagged: untagged.length };
 }
 
-export async function getSubjectsBySection(section, term) {
-  // section: "JS", "SS", or "ALL"
-  const allClasses = ["JS 1","JS 2","JS 3","SS 1","SS 2","SS 3"];
-  const classes = section === "JS"  ? ["JS 1","JS 2","JS 3"]
-                : section === "SS"  ? ["SS 1","SS 2","SS 3"]
-                : allClasses;
-  const subjectSet = new Set();
-  await Promise.all(classes.map(async cls => {
-    var id   = (cls + "_" + term).replace(/\s+/g, "_");
-    const snap = await getDoc(doc(db, "classSubjects", id));
-    if (snap.exists()) snap.data().subjects.forEach(s => subjectSet.add(s));
+export async function getSubjectsBySection(section, term, session) {
+  // Maps every section to its class list
+  var sectionMap = {
+    "SS":      ["SS 1","SS 2","SS 3"],
+    "JS":      ["JS 1","JS 2","JS 3"],
+    "BASIC":   ["Basic 1","Basic 2","Basic 3","Basic 4","Basic 5"],
+    "NURSERY": ["Nursery 1","Nursery 2","Nursery 3"],
+    "CRECHE":  ["Creche"]
+  };
+  var allClasses = ["SS 1","SS 2","SS 3","JS 1","JS 2","JS 3",
+    "Basic 1","Basic 2","Basic 3","Basic 4","Basic 5",
+    "Nursery 1","Nursery 2","Nursery 3","Creche"];
+  var classes = sectionMap[section] || allClasses;
+
+  var subjectSet = new Set();
+  await Promise.all(classes.map(async function(cls) {
+    // Try session-specific first, fall back to old untagged
+    var subjects = [];
+    if (session) {
+      var sessionPart = session.replace(/\//g, "-").replace(/\s+/g, "_");
+      var sessionId = (cls + "_" + term + "_" + sessionPart).replace(/\s+/g, "_");
+      var sessionSnap = await getDoc(doc(db, "classSubjects", sessionId));
+      if (sessionSnap.exists()) subjects = sessionSnap.data().subjects || [];
+    }
+    // Fallback to old untagged doc
+    if (!subjects.length) {
+      var oldId = (cls + "_" + term).replace(/\s+/g, "_");
+      var oldSnap = await getDoc(doc(db, "classSubjects", oldId));
+      if (oldSnap.exists()) subjects = oldSnap.data().subjects || [];
+    }
+    subjects.forEach(function(s) { subjectSet.add(s); });
   }));
   return [...subjectSet].sort();
 }
@@ -457,17 +496,62 @@ export async function getTeacherNames() {
 }
 
 // SESSION
-export async function saveSession(session, term, schoolName, schoolLogo, termStartDate, termEndDate) {
+export async function saveSession(session, term, schoolName, schoolLogo, termStartDate, termEndDate, extra) {
   const data = { session, currentTerm: String(term), updatedAt: serverTimestamp() };
-  if (schoolName     !== undefined) data.schoolName     = schoolName;
-  if (schoolLogo     !== undefined) data.schoolLogo     = schoolLogo;
-  if (termStartDate  !== undefined) data.termStartDate  = termStartDate;
-  if (termEndDate    !== undefined) data.termEndDate    = termEndDate;
+  if (schoolName    !== undefined) data.schoolName    = schoolName;
+  if (schoolLogo    !== undefined) data.schoolLogo    = schoolLogo;
+  if (termStartDate !== undefined) data.termStartDate = termStartDate;
+  if (termEndDate   !== undefined) data.termEndDate   = termEndDate;
+  // New school identity fields
+  if (extra) {
+    if (extra.schoolAddress   !== undefined) data.schoolAddress   = extra.schoolAddress;
+    if (extra.schoolMotto     !== undefined) data.schoolMotto     = extra.schoolMotto;
+    if (extra.schoolPhone     !== undefined) data.schoolPhone     = extra.schoolPhone;
+    if (extra.schoolType      !== undefined) data.schoolType      = extra.schoolType;
+    if (extra.nextTermBegins  !== undefined) data.nextTermBegins  = extra.nextTermBegins;
+    // Next term fees per section
+    if (extra.feesCreche      !== undefined) data.feesCreche      = extra.feesCreche;
+    if (extra.feesNursery     !== undefined) data.feesNursery     = extra.feesNursery;
+    if (extra.feesBasic       !== undefined) data.feesBasic       = extra.feesBasic;
+    if (extra.feesJSS         !== undefined) data.feesJSS         = extra.feesJSS;
+    if (extra.feesSSS         !== undefined) data.feesSSS         = extra.feesSSS;
+    // Principal remarks (Secondary)
+    if (extra.principalRemark1 !== undefined) data.principalRemark1 = extra.principalRemark1;
+    if (extra.principalRemark2 !== undefined) data.principalRemark2 = extra.principalRemark2;
+    if (extra.principalRemark3 !== undefined) data.principalRemark3 = extra.principalRemark3;
+    if (extra.principalRemark4 !== undefined) data.principalRemark4 = extra.principalRemark4;
+    // Head Teacher remarks (Basic/Nursery/Creche)
+    if (extra.htRemark1 !== undefined) data.htRemark1 = extra.htRemark1;
+    if (extra.htRemark2 !== undefined) data.htRemark2 = extra.htRemark2;
+    if (extra.htRemark3 !== undefined) data.htRemark3 = extra.htRemark3;
+    if (extra.htRemark4 !== undefined) data.htRemark4 = extra.htRemark4;
+    // Grading system
+    if (extra.gradeA  !== undefined) data.gradeA  = extra.gradeA;
+    if (extra.gradeB1 !== undefined) data.gradeB1 = extra.gradeB1;
+    if (extra.gradeB2 !== undefined) data.gradeB2 = extra.gradeB2;
+    if (extra.gradeC  !== undefined) data.gradeC  = extra.gradeC;
+    if (extra.gradeD  !== undefined) data.gradeD  = extra.gradeD;
+    if (extra.gradeF  !== undefined) data.gradeF  = extra.gradeF;
+  }
   await setDoc(doc(db, "settings", "session"), data, { merge: true });
 }
 export async function getSession() {
   const snap = await getDoc(doc(db, "settings", "session"));
-  return snap.exists() ? snap.data() : { session: "2024/2025", currentTerm: "1", schoolName: "", schoolLogo: "", termStartDate: "", termEndDate: "" };
+  if (snap.exists()) return snap.data();
+  // Default values
+  return {
+    session: "2024/2025", currentTerm: "1",
+    schoolName: "", schoolLogo: "",
+    termStartDate: "", termEndDate: "",
+    schoolAddress: "", schoolMotto: "", schoolPhone: "", schoolType: "",
+    nextTermBegins: "",
+    feesCreche: "", feesNursery: "", feesBasic: "",
+    feesJSS: "", feesSSS: "", feesSecondary: "",
+    principalRemark1: "", principalRemark2: "", principalRemark3: "", principalRemark4: "",
+    htRemark1: "", htRemark2: "", htRemark3: "", htRemark4: "",
+    gradeA: "86-100", gradeB1: "71-85", gradeB2: "61-70",
+    gradeC: "50-60", gradeD: "39-49", gradeF: "0-38"
+  };
 }
 
 // TERM RESET
@@ -491,6 +575,26 @@ export async function saveAttendance(data) {
   await setDoc(doc(db, "attendance", id), {
     ...data, regNumber: data.regNumber.toUpperCase(), updatedAt: serverTimestamp()
   }, { merge: true });
+}
+
+// BATCH ATTENDANCE SAVE — saves all students attendance in ONE atomic commit
+// All save or none save — no partial attendance on network failure
+// Same write count but one network round trip
+export async function saveAttendanceBatch(recordsArray) {
+  if (!recordsArray || !recordsArray.length) return;
+  var chunkSize = 490;
+  for (var i = 0; i < recordsArray.length; i += chunkSize) {
+    var chunk = recordsArray.slice(i, i + chunkSize);
+    var batch = writeBatch(db);
+    chunk.forEach(function(data) {
+      var id = data.regNumber.toUpperCase() + "_" + data.date;
+      batch.set(doc(db, "attendance", id),
+        Object.assign({}, data, { regNumber: data.regNumber.toUpperCase(), updatedAt: serverTimestamp() }),
+        { merge: true }
+      );
+    });
+    await batch.commit();
+  }
 }
 export async function getAttendanceByClassBaseTerm(classBase, term, session) {
   const q = query(collection(db, "attendance"),

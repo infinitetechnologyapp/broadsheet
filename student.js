@@ -1,6 +1,6 @@
 // ============================================================
-//  student.js — BrightSchool Result Broadsheet
-//  Loads student result ONLY if admin has approved it
+//  student.js — SchoolNova Result Card
+//  Generates A4 printable report card from Firestore data
 // ============================================================
 import {
   getStudentByReg,
@@ -8,155 +8,389 @@ import {
   getRemarkByStudentTerm,
   getSession,
   isResultApproved,
-  getScoresByClassArmSubjectTerm,
-  getStudentsByClassArm,
-  getAttendanceByStudent,
-  getHolidays
+  getScoresByClassArmTerm,
+  getClassSubjects,
+  getStudentsByClassArm
 } from "./firebase.js";
 
-const S          = id => document.getElementById(id);
-const termLabels = { "1":"1st Term", "2":"2nd Term", "3":"3rd Term" };
+const S = id => document.getElementById(id);
 
+const TERM_LABELS = { "1":"1ST TERM", "2":"2ND TERM", "3":"3RD TERM" };
+
+// ── Grade calculation using school's custom grading ──────────
+var _grading = {
+  A: "86-100", B1: "71-85", B2: "61-70", C: "50-60", D: "39-49", F: "0-38"
+};
+function parseRange(range) {
+  var parts = (range || "").split("-").map(function(p){ return parseInt(p.trim(), 10); });
+  return { min: parts[0]||0, max: parts[1]||100 };
+}
 function getGrade(total) {
-  if (total >= 80) return "A";
-  if (total >= 60) return "B";
-  if (total >= 50) return "C";
-  if (total >= 40) return "D";
+  if (total >= parseRange(_grading.A).min)  return "A";
+  if (total >= parseRange(_grading.B1).min) return "B1";
+  if (total >= parseRange(_grading.B2).min) return "B2";
+  if (total >= parseRange(_grading.C).min)  return "C";
+  if (total >= parseRange(_grading.D).min)  return "D";
   return "F";
 }
-function gradeColor(g) {
-  return { A:"#16a34a", B:"#2563eb", C:"#d97706", D:"#ea580c", F:"#dc2626" }[g] || "inherit";
-}
 function ordinal(n) {
-  const s=["th","st","nd","rd"], v=n%100;
-  return n+(s[(v-20)%10]||s[v]||s[0]);
+  var s=["th","st","nd","rd"], v=n%100;
+  return n + (s[(v-20)%10] || s[v] || s[0]);
 }
 
-const params = new URLSearchParams(window.location.search);
-const reg    = params.get("reg")?.toUpperCase().trim();
-const term   = params.get("term");
+// ── Determine school section from classArm ───────────────────
+function getSection(classArm) {
+  if (!classArm) return "secondary";
+  var c = classArm.toLowerCase();
+  if (c.startsWith("creche"))  return "creche";
+  if (c.startsWith("nursery")) return "nursery";
+  if (c.startsWith("basic"))   return "basic";
+  return "secondary"; // JS and SS
+}
 
+// ── Random tick generator (seeded by reg number) ─────────────
+// A=60%, B=30%, C=10%, D=Never
+function seededRandom(seed) {
+  var x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
+function randomTick(seed, idx) {
+  var r = seededRandom(seed + idx * 37.7);
+  if (r < 0.60) return "A";
+  if (r < 0.90) return "B";
+  if (r < 1.00) return "C";
+  return "B"; // safety — never D
+}
+function seedFromReg(reg) {
+  var n = 0;
+  for (var i = 0; i < reg.length; i++) n += reg.charCodeAt(i) * (i + 1);
+  return n;
+}
+
+// ── Affective Traits ─────────────────────────────────────────
+var AFFECTIVE_TRAITS = [
+  "Diligence", "Leadership", "Self-Control", "Neatness",
+  "Honesty", "Obedience", "Humility", "Friendliness",
+  "Consistency", "Reliability", "Punctuality"
+];
+
+// ── Psychomotor Skills ───────────────────────────────────────
+var PSYCHOMOTOR_SKILLS = [
+  "Hand Writing", "Verbal Fluency", "Games",
+  "Social", "Handling Tools", "Drawing & Painting"
+];
+
+// ── Build traits table ───────────────────────────────────────
+function buildTraitsTable(tbodyId, traits, seed, startIdx) {
+  var tbody = S(tbodyId);
+  if (!tbody) return;
+  tbody.innerHTML = traits.map(function(trait, i) {
+    var tick = randomTick(seed, startIdx + i);
+    var cells = ["A","B","C","D"].map(function(g) {
+      return "<td class='" + (tick===g?"tick-cell":"") + "'>" + (tick===g?"✓":"") + "</td>";
+    }).join("");
+    return "<tr><td class='trait-name'>" + trait + "</td>" + cells + "</tr>";
+  }).join("");
+}
+
+// ── Select HOD remark based on position ──────────────────────
+function selectHodRemark(position, session) {
+  var remarks = [];
+  if (getSection(_scoreClassArm) === "secondary") {
+    remarks = [
+      session.principalRemark1 || "",
+      session.principalRemark2 || "",
+      session.principalRemark3 || "",
+      session.principalRemark4 || ""
+    ];
+  } else {
+    remarks = [
+      session.htRemark1 || "",
+      session.htRemark2 || "",
+      session.htRemark3 || "",
+      session.htRemark4 || ""
+    ];
+  }
+  if (position <= 5)  return remarks[0] || remarks[3] || "Keep up the good work.";
+  if (position <= 10) return remarks[1] || remarks[3] || "Good effort. Aim higher.";
+  if (position <= 20) return remarks[2] || remarks[3] || "More effort needed.";
+  return remarks[3] || "Study harder next term.";
+}
+
+// ── Get next term fees based on section ──────────────────────
+function getSectionFees(session, classArm) {
+  var sec = getSection(classArm);
+  if (sec === "creche")  return session.feesCreche  || "—";
+  if (sec === "nursery") return session.feesNursery || "—";
+  if (sec === "basic")   return session.feesBasic   || "—";
+  // Secondary — check if JS or SS
+  var c = (classArm || "").toLowerCase();
+  if (c.startsWith("js")) return session.feesJSS || session.feesSecondary || "—";
+  return session.feesSSS || session.feesSecondary || "—";
+}
+
+// ── Format closing date ───────────────────────────────────────
+function formatDate(dateStr) {
+  if (!dateStr) return "—";
+  try {
+    return new Date(dateStr).toLocaleDateString("en-GB", {
+      day:"2-digit", month:"long", year:"numeric"
+    });
+  } catch(e) { return dateStr; }
+}
+
+// Global — used in selectHodRemark
+var _scoreClassArm = "";
+
+// ── URL params ───────────────────────────────────────────────
+var params  = new URLSearchParams(window.location.search);
+var reg     = (params.get("reg")     || "").toUpperCase().trim();
+var term    = params.get("term")     || "";
+var urlSession = params.get("session") || ""; // passed from index.html
+
+// ── Main load function ───────────────────────────────────────
 async function loadResult() {
   if (!reg || !term) { showError("Invalid link. Please go back and try again."); return; }
 
   try {
-    const [student, session] = await Promise.all([
-      getStudentByReg(reg),
-      getSession()
-    ]);
+    // Fetch student + school settings in parallel
+    var results = await Promise.all([getStudentByReg(reg), getSession()]);
+    var student = results[0];
+    var session = results[1];
+
+    // currentSession — URL param takes priority (set by index.html at moment student clicks)
+    // Falls back to Firebase session for direct/bookmarked links
+    var currentSession = urlSession || session.session || "";
 
     if (!student) { showError("Registration number not found. Please check and try again."); return; }
 
-    // ── CLASS APPROVAL CHECK ──────────────────────────────────
-    const approved = await isResultApproved(student.classArm, term, session.session||"");
+    // Approval check — uses currentSession so it matches the correct session's approval doc
+    var approved = await isResultApproved(student.classArm, term, currentSession);
     if (!approved) {
       S("loadingState").classList.add("hidden");
       S("notApprovedState").classList.remove("hidden");
-      S("notApprovedClass").textContent = `${student.classArm} — ${termLabels[term]||"Term "+term}`;
+      S("notApprovedClass").textContent = (student.classArm||"") + " — " + (TERM_LABELS[term]||("Term "+term));
       return;
     }
 
-    // Load scores — no session filter, then client-side filter:
-    // Include old untagged scores (no session) + current session scores only
-    const [allScoresRaw, remark] = await Promise.all([
-      getScoresByStudentTerm(reg, term),
-      getRemarkByStudentTerm(reg, term, session.session||"")
-    ]);
-    const currentSession = session.session || "";
-    // Old score = no session field (belongs to current session until Admin changes)
-    // New score = has session field (only show if matches current session)
-    const scores = allScoresRaw.filter(sc => !sc.session || sc.session === currentSession);
+    // Load scores + remark — filtered to currentSession
+    var allScoresRaw = await getScoresByStudentTerm(reg, term);
+    var remark       = await getRemarkByStudentTerm(reg, term, currentSession);
+    var scores = allScoresRaw.filter(function(sc) {
+      return !sc.session || sc.session === currentSession;
+    });
 
-    // Get classArm from scores — shows correct class when scores were earned
-    // If student was promoted, this shows the class they were in, not their current class
-    const scoreClassArm = scores.length > 0 ? (scores[0].classArm || student.classArm) : student.classArm;
+    // Historical class from scores
+    _scoreClassArm = scores.length > 0 ? (scores[0].classArm || student.classArm) : student.classArm;
+    var section    = getSection(_scoreClassArm);
+    var scoreClassBase = _scoreClassArm.replace(/[AB]$/, "").trim();
 
-    // Fill student info
+    // Apply school grading system
+    if (session.gradeA)  _grading.A  = session.gradeA;
+    if (session.gradeB1) _grading.B1 = session.gradeB1;
+    if (session.gradeB2) _grading.B2 = session.gradeB2;
+    if (session.gradeC)  _grading.C  = session.gradeC;
+    if (session.gradeD)  _grading.D  = session.gradeD;
+    if (session.gradeF)  _grading.F  = session.gradeF;
+
+    // ── HEADER ─────────────────────────────────────────────
+    S("rcSchoolName").textContent    = session.schoolName    || "SCHOOL NAME";
+    S("rcSchoolType").textContent    = session.schoolType    || "";
+    S("rcSchoolAddress").textContent = session.schoolAddress || "";
+    S("rcSchoolMotto").textContent   = session.schoolMotto   || "";
+    S("rcSchoolPhone").textContent   = session.schoolPhone   || "";
+
+    // Logo
+    if (session.schoolLogo) {
+      var logoImg = S("rcLogoImg");
+      logoImg.src = session.schoolLogo;
+      logoImg.style.display = "block";
+      S("rcLogoPlaceholder").style.display = "none";
+    }
+
+    // Report title
+    var sectionLabel = section === "secondary" ? "SECONDARY" :
+                       section === "basic"     ? "BASIC" :
+                       section === "nursery"   ? "NURSERY" : "CRECHE";
+    S("rcReportTitle").textContent = sectionLabel + " PROGRESS REPORT";
+
+    S("rcSession").textContent = session.session || "—";
+    S("rcTerm").textContent    = TERM_LABELS[term] || ("TERM " + term);
+
+    // ── STUDENT INFO ───────────────────────────────────────
     S("rcName").textContent   = student.fullName  || "—";
     S("rcReg").textContent    = student.regNumber || reg;
-    S("rcClass").textContent  = scoreClassArm || "—";
     S("rcGender").textContent = student.gender    || "—";
-    S("rcTerm").textContent   = termLabels[term]  || `Term ${term}`;
-    S("rcDate").textContent   = `Printed: ${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})}`;
-    S("sessionBadge").textContent = `${session.session||"2024/2025"} — ${termLabels[term]||"Term"}`;
-    S("rcRemark").textContent = remark?.remark || "No remark entered yet.";
+    // Class = base only (e.g. "JS 1" not "JS 1A")
+    S("rcClass").textContent  = scoreClassBase    || "—";
+    // Stream = arm letter only (e.g. "A" or "B")
+    var armLetter = student.arm || _scoreClassArm.slice(-1) || "—";
+    S("rcStream").textContent = armLetter;
 
+    // Class population = total in both Arms A and B
+    var armStudents  = await getStudentsByClassArm(_scoreClassArm);
+    var otherArm     = _scoreClassArm.endsWith("A")
+      ? _scoreClassArm.slice(0,-1) + "B"
+      : _scoreClassArm.slice(0,-1) + "A";
+    var otherStudents = await getStudentsByClassArm(otherArm);
+    var classPopulation = armStudents.length + otherStudents.length;
+    S("rcPopulation").textContent = classPopulation || "—";
+
+    // ── SCORES ─────────────────────────────────────────────
     if (!scores.length) {
-      S("resultTbody").innerHTML = `<tr><td colspan="7" class="text-center" style="padding:30px;color:var(--text-muted)">No scores recorded for this term yet.</td></tr>`;
+      S("resultTbody").innerHTML = "<tr><td colspan='7' style='text-align:center;padding:12px;color:#94a3b8'>No scores recorded for this term.</td></tr>";
       S("loadingState").classList.add("hidden");
       S("resultContent").classList.remove("hidden");
       return;
     }
 
-    // Group scores by subject
-    const myScores = {};
-    scores.forEach(sc => { myScores[sc.subject] = sc; });
-    const subjects = Object.keys(myScores).sort();
+    var myScores = {};
+    scores.forEach(function(sc) { myScores[sc.subject] = sc; });
 
-    // Calculate per-subject position within same arm
-    // Use scoreClassArm (class when scores were earned) not student.classArm (current class)
-    const armStudents = await getStudentsByClassArm(scoreClassArm);
-    const armRegs     = armStudents.map(s => s.regNumber);
-    const positionMap = {};
-    await Promise.all(subjects.map(async subject => {
-      const allSc  = await getScoresByClassArmSubjectTerm(scoreClassArm, subject, term);
-      const armSc  = allSc.filter(s => armRegs.includes(s.regNumber) && (!s.session || s.session === currentSession));
-      const sorted = armSc
-        .map(s => ({ reg: s.regNumber, total: (s.test1||0)+(s.test2||0)+(s.exam||0) }))
-        .sort((a,b) => b.total - a.total);
-      const idx = sorted.findIndex(s => s.reg === reg);
+    // ── FETCH ALL CLASS SUBJECTS (not just this student's scores) ──
+    // All class subjects shown — blank rows for subjects student didn't take
+    var classAllSubjects = await getClassSubjects(scoreClassBase, term, currentSession);
+
+    // Priority order — Maths and English first, matching broadsheet order
+    var PRIORITY_SUBJECTS = [
+      "Mathematics","Maths","English Language","English","English Literature",
+      "Physics","Chemistry","Biology","Agricultural Science",
+      "Government","Economics","Commerce","Christian Religious Studies",
+      "Islamic Religious Studies","Civic Education","Geography",
+      "Marketing","Accounting","Computer","Computer Science",
+      "Data Processing","Technical Drawing","Further Mathematics",
+      "Basic Science","Basic Technology","Social Studies","Security Education",
+      "French","Yoruba","Igbo","Hausa","Music","Fine Art","Physical Education"
+    ];
+    // Merge class subjects + student's own scored subjects (in case of mismatch)
+    var allSubjectSet = new Set(classAllSubjects);
+    Object.keys(myScores).forEach(function(s){ allSubjectSet.add(s); });
+    var allSubjects  = Array.from(allSubjectSet);
+    var prioritized  = PRIORITY_SUBJECTS.filter(function(s){ return allSubjects.includes(s); });
+    var remaining    = allSubjects.filter(function(s){ return !prioritized.includes(s); }).sort();
+    var subjects     = prioritized.concat(remaining);
+
+    // ── OPTIMIZED POSITION CALCULATION ─────────────────────
+    // ONE query gets ALL scores for entire class arm + term
+    var armRegs = armStudents.map(function(s){ return s.regNumber; });
+    var allClassScores = await getScoresByClassArmTerm(_scoreClassArm, term);
+    var classScores = allClassScores.filter(function(s){
+      return armRegs.includes(s.regNumber) && (!s.session || s.session === currentSession);
+    });
+
+    // Build per-subject position map — only for subjects this student actually scored
+    var positionMap = {};
+    Object.keys(myScores).forEach(function(subject) {
+      var subjectScores = classScores.filter(function(s){ return s.subject === subject; })
+        .map(function(s){ return { reg: s.regNumber, total: (s.test1||0)+(s.test2||0)+(s.exam||0) }; })
+        .sort(function(a,b){ return b.total - a.total; });
+      var idx = subjectScores.findIndex(function(s){ return s.reg === reg; });
       positionMap[subject] = idx >= 0 ? ordinal(idx + 1) : "—";
-    }));
+    });
 
-    // Build score rows + grand total
-    let grandTotal = 0;
-    S("resultTbody").innerHTML = subjects.map(subject => {
-      const sc    = myScores[subject];
-      const t1    = sc.test1||0, t2 = sc.test2||0, ex = sc.exam||0;
-      const total = t1 + t2 + ex;
-      const grade = getGrade(total);
+    // Overall position — from single query result
+    var armTotalsMap = {};
+    classScores.forEach(function(sc) {
+      if (!armTotalsMap[sc.regNumber]) armTotalsMap[sc.regNumber] = 0;
+      armTotalsMap[sc.regNumber] += (sc.test1||0) + (sc.test2||0) + (sc.exam||0);
+    });
+    var armTotalsSorted = Object.keys(armTotalsMap)
+      .map(function(r){ return { reg: r, total: armTotalsMap[r] }; })
+      .sort(function(a,b){ return b.total - a.total; });
+    var armPos = armTotalsSorted.findIndex(function(s){ return s.reg === reg; }) + 1;
+    var posStr = armPos > 0 ? ordinal(armPos) : "—";
+
+    // ── BUILD SCORE TABLE ──────────────────────────────────
+    // Show ALL class subjects — blank if student didn't take it
+    // Replace 0 with dash — students who didn't sit exam show -
+    var grandTotal = 0;
+    S("resultTbody").innerHTML = subjects.map(function(subject) {
+      var sc = myScores[subject];
+      if (!sc) {
+        // Subject not taken by this student — show blank row
+        return "<tr>" +
+          "<td class='subj-name'>" + subject + "</td>" +
+          "<td>—</td><td>—</td><td>—</td>" +
+          "<td>—</td><td>—</td><td>—</td>" +
+          "</tr>";
+      }
+      var t1 = sc.test1 || 0, t2 = sc.test2 || 0, ex = sc.exam || 0;
+      var total = t1 + t2 + ex;
+      var g = getGrade(total);
       grandTotal += total;
-      return `<tr>
-        <td style="text-align:left;font-weight:700">${subject}</td>
-        <td style="text-align:center">${t1}</td>
-        <td style="text-align:center">${t2}</td>
-        <td style="text-align:center">${ex}</td>
-        <td style="text-align:center;font-weight:800">${total}</td>
-        <td style="text-align:center;font-weight:800;color:${gradeColor(grade)}">${grade}</td>
-        <td style="text-align:center;font-weight:800;color:var(--primary)">${positionMap[subject]||"—"}</td>
-      </tr>`;
+      // Replace 0 with dash — student didn't sit that component
+      var d1  = t1 > 0 ? t1  : "—";
+      var d2  = t2 > 0 ? t2  : "—";
+      var dex = ex > 0 ? ex  : "—";
+      var dtot = total > 0 ? total : "—";
+      return "<tr>" +
+        "<td class='subj-name'>" + subject + "</td>" +
+        "<td>" + d1 + "</td>" +
+        "<td>" + d2 + "</td>" +
+        "<td>" + dex + "</td>" +
+        "<td style='font-weight:800'>" + dtot + "</td>" +
+        "<td style='font-weight:800;color:#1E40AF'>" + (positionMap[subject]||"—") + "</td>" +
+        "<td class='grade-cell'>" + (total > 0 ? g : "—") + "</td>" +
+        "</tr>";
     }).join("");
 
-    // Overall position in arm — no session filter, client-side filter for old scores
-    const allArmTotals = await Promise.all(
-      armStudents.map(async s => {
-        const sc  = await getScoresByStudentTerm(s.regNumber, term);
-        const tot = sc
-          .filter(r => !r.session || r.session === currentSession)
-          .reduce((sum,r)=>sum+(r.test1||0)+(r.test2||0)+(r.exam||0),0);
-        return { reg: s.regNumber, total: tot };
-      })
-    );
-    const sortedArm = allArmTotals.sort((a,b) => b.total - a.total);
-    const armPos    = sortedArm.findIndex(s => s.reg === reg) + 1;
-    const posStr    = armPos > 0 ? ordinal(armPos) : "—";
-    const avg       = subjects.length > 0 ? (grandTotal / subjects.length).toFixed(1) : "0";
+    // Only count subjects the student actually took for obtainable/average
+    var takenSubjects = subjects.filter(function(s){ return myScores[s]; });
+    var avg        = takenSubjects.length > 0
+      ? (grandTotal / takenSubjects.length).toFixed(1) : "0";
+    var obtainable = takenSubjects.length * 100;
+    var passFail   = "PASS"; // All students show PASS
 
-    S("rcTotal").textContent          = grandTotal;
-    S("rcAverage").textContent        = avg;
-    S("rcSubjectCount").textContent   = subjects.length;
-    S("rcPosition").textContent       = posStr;
-    S("rcPositionSummary").textContent = posStr;
+    // ── TRAITS + PSYCHOMOTOR ───────────────────────────────
+    var seed = seedFromReg(reg + term);
+    buildTraitsTable("affectiveTbody",  AFFECTIVE_TRAITS,   seed, 0);
+    buildTraitsTable("psychomotorTbody", PSYCHOMOTOR_SKILLS, seed, 100);
+
+    // ── SUMMARY ────────────────────────────────────────────
+    S("rcObtainable").textContent = obtainable;
+    S("rcPassFail").textContent   = passFail;
+    S("rcTotal").textContent      = grandTotal;
+    S("rcAverage").textContent    = avg;
+    S("rcPosition").textContent   = posStr;
+    S("rcInfoPosition").textContent = posStr;   // also in student info box
+    S("rcOutOf").textContent      = classPopulation || armStudents.length;
+    S("rcFees").textContent       = getSectionFees(session, _scoreClassArm);
+    S("rcNextTerm").textContent   = formatDate(session.nextTermBegins);
+
+    // ── REMARKS ────────────────────────────────────────────
+    S("rcRemark").textContent = remark && remark.remark ? remark.remark : "No remark entered yet.";
+    S("rcClosingDate").textContent = formatDate(session.termEndDate);
+    S("rcHodDate").textContent     = formatDate(session.termEndDate);
+
+    // HOD title and remark — Principal for Secondary, Head Teacher for Basic/Nursery/Creche
+    var isSecondary = section === "secondary";
+    S("rcHodTitle").textContent  = isSecondary ? "Principal's Remarks" : "Head Teacher's Remarks";
+    S("rcHodRemark").textContent = selectHodRemark(armPos, session);
+
+    // ── GRADING KEY ────────────────────────────────────────
+    var gradingData = [
+      { letter:"A",  label:"Excellent",  range: session.gradeA  || "86-100" },
+      { letter:"B1", label:"Very Good",  range: session.gradeB1 || "71-85"  },
+      { letter:"B2", label:"Good",       range: session.gradeB2 || "61-70"  },
+      { letter:"C",  label:"Credit",     range: session.gradeC  || "50-60"  },
+      { letter:"D",  label:"Pass",       range: session.gradeD  || "39-49"  },
+      { letter:"F",  label:"Fail",       range: session.gradeF  || "0-38"   }
+    ];
+    S("rcGradingKey").innerHTML = gradingData.map(function(g) {
+      return "<div class='rc-grade-row'>" +
+        "<span class='rc-grade-letter'>" + g.letter + "</span>" +
+        "<span class='rc-grade-label'>= " + g.label + "</span>" +
+        "<span class='rc-grade-range'>" + g.range + "</span>" +
+        "</div>";
+    }).join("");
+
+    // ── FOOTER ─────────────────────────────────────────────
+    S("rcDateGenerated").textContent = new Date().toLocaleDateString("en-GB", {
+      day:"2-digit", month:"long", year:"numeric"
+    });
 
     S("loadingState").classList.add("hidden");
     S("resultContent").classList.remove("hidden");
-
-    // Load attendance after result shown
-    loadAttendance(student, session, term);
-
-    S("downloadPdfBtn").addEventListener("click", () =>
-      downloadPDF(student, subjects, myScores, positionMap, grandTotal, avg, posStr, remark, session, term)
-    );
 
   } catch(e) {
     console.error(e);
@@ -164,154 +398,10 @@ async function loadResult() {
   }
 }
 
-// ── Attendance Section ────────────────────────────────────────
-async function loadAttendance(student, session, term) {
-  try {
-    const [attRecs, holidays] = await Promise.all([
-      getAttendanceByStudent(student.regNumber, term, session.session||""),
-      getHolidays(session.session||"", term)
-    ]);
-
-    const holidayDates = new Set(holidays.map(h => h.date));
-    attRecs.filter(r => r.status === "Holiday").forEach(r => holidayDates.add(r.date));
-    const nonHolRecs = attRecs.filter(r => r.status !== "Holiday" && !holidayDates.has(r.date));
-
-    if (!nonHolRecs.length) return; // no attendance data — keep section hidden
-
-    // School days open
-    const schoolDates = [...new Set(nonHolRecs.map(r => r.date))].filter(d => {
-      const day = new Date(d).getDay(); return day !== 0 && day !== 6;
-    }).sort();
-    const schoolDays = schoolDates.length;
-    const possible   = schoolDays * 2;
-
-    // Total AM + PM
-    const presRecs = nonHolRecs.filter(r => r.status === "Present");
-    const totalAM  = presRecs.reduce((s, r) => s + (r.morning||0), 0);
-    const totalPM  = presRecs.reduce((s, r) => s + (r.afternoon||0), 0);
-    const totalPres = totalAM + totalPM;
-    const pct       = possible > 0 ? ((totalPres / possible) * 100).toFixed(1) : "0";
-    const avg       = schoolDays > 0 ? (totalPres / schoolDays).toFixed(2) : "0";
-
-    S("attTotal").innerHTML  = totalAM + "+" + totalPM;
-    S("attTotalSub").textContent = "Total: " + totalPres + " sessions";
-    S("attPct").textContent  = pct + "%";
-    S("attPctSub").textContent = totalPres + " of " + possible + " possible";
-    S("attAvg").textContent  = avg;
-
-    // Build weekly breakdown using term start date
-    const termStart = session.termStartDate ? new Date(session.termStartDate) : null;
-    const byWeek = {};
-    schoolDates.forEach(d => {
-      let wk;
-      if (termStart) {
-        const diff = Math.floor((new Date(d) - termStart) / (7*24*60*60*1000));
-        wk = "Week " + (diff + 1);
-      } else {
-        const dt = new Date(d);
-        dt.setHours(0,0,0,0);
-        dt.setDate(dt.getDate() + 3 - (dt.getDay()+6)%7);
-        const w1 = new Date(dt.getFullYear(),0,4);
-        wk = "Week " + (1 + Math.round(((dt-w1)/86400000 - 3 + (w1.getDay()+6)%7)/7));
-      }
-      if (!byWeek[wk]) byWeek[wk] = { am:0, pm:0, days:0 };
-      byWeek[wk].days++;
-      const dayRec = presRecs.filter(r => r.date === d);
-      byWeek[wk].am += dayRec.reduce((s,r) => s+(r.morning||0), 0);
-      byWeek[wk].pm += dayRec.reduce((s,r) => s+(r.afternoon||0), 0);
-    });
-
-    const weekKeys = Object.keys(byWeek).sort((a,b) => parseInt(a.split(" ")[1]) - parseInt(b.split(" ")[1]));
-    const pctClass = p => parseFloat(p) >= 75 ? "#16a34a" : parseFloat(p) >= 50 ? "#d97706" : "#dc2626";
-
-    S("attWeeklyTbody").innerHTML = weekKeys.map(wk => {
-      const w      = byWeek[wk];
-      const tot    = w.am + w.pm;
-      const maxWk  = w.days * 2;
-      const wkPct  = maxWk > 0 ? ((tot / maxWk) * 100).toFixed(1) : "0";
-      return `<tr>
-        <td style="font-weight:700">${wk}</td>
-        <td style="text-align:center">${w.am}</td>
-        <td style="text-align:center">${w.pm}</td>
-        <td style="text-align:center;font-weight:800">${tot}</td>
-        <td style="text-align:center;color:var(--text-muted)">${maxWk}</td>
-        <td style="text-align:center;font-weight:800;color:${pctClass(wkPct)}">${wkPct}%</td>
-      </tr>`;
-    }).join("") || `<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text-muted)">No weekly data.</td></tr>`;
-
-    S("attendanceSection").style.display = "block";
-  } catch(e) { console.error("Attendance load error:", e); }
-}
-
 function showError(msg) {
   S("loadingState").classList.add("hidden");
   S("errorMsg").textContent = msg;
   S("errorState").classList.remove("hidden");
-}
-
-// ── PDF Download ──────────────────────────────────────────────
-function downloadPDF(student, subjects, myScores, positionMap, grandTotal, avg, position, remark, session, term) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
-  const indigo=[79,70,229], white=[255,255,255], light=[237,233,254];
-  const termLbl = termLabels[term]||`Term ${term}`;
-
-  doc.setFillColor(...indigo);
-  doc.rect(0,0,210,42,"F");
-  doc.setTextColor(...white);
-  doc.setFont("helvetica","bold"); doc.setFontSize(18);
-  doc.text("BrightSchool",105,16,{align:"center"});
-  doc.setFontSize(9); doc.setFont("helvetica","normal");
-  doc.text("Student Report Card",105,23,{align:"center"});
-  doc.text(`${session.session||"2024/2025"} — ${termLbl}`,105,30,{align:"center"});
-
-  doc.setFillColor(...light);
-  doc.roundedRect(14,48,182,36,3,3,"F");
-  doc.setTextColor(30,41,59);
-  doc.setFont("helvetica","bold"); doc.setFontSize(10);
-  doc.text(student.fullName||"—",20,57);
-  doc.setFont("helvetica","normal"); doc.setFontSize(8);
-  doc.text(`Reg: ${student.regNumber}`,20,64);
-  doc.text(`Class: ${student.classArm}`,20,70);
-  doc.text(`Gender: ${student.gender||"—"}`,20,76);
-  doc.text(`Term: ${termLbl}`,100,64);
-  doc.text(`Position: ${position}`,100,70);
-  doc.text(`Average: ${avg}%`,100,76);
-
-  const rows = subjects.map(subject => {
-    const sc    = myScores[subject];
-    const t1    = sc.test1||0, t2=sc.test2||0, ex=sc.exam||0;
-    const total = t1+t2+ex;
-    return [subject,t1,t2,ex,total,getGrade(total),positionMap[subject]||"—"];
-  });
-
-  doc.autoTable({
-    startY:90,
-    head:[["Subject","1st Test\n/20","2nd Test\n/20","Exam\n/60","Total\n/100","Grade","Position"]],
-    body:rows,
-    foot:[[`Grand Total: ${grandTotal}`,"","","","",`Avg: ${avg}`,`Pos: ${position}`]],
-    theme:"grid",
-    headStyles:{fillColor:indigo,textColor:white,fontStyle:"bold",fontSize:8,halign:"center"},
-    bodyStyles:{fontSize:8,halign:"center"},
-    footStyles:{fillColor:light,textColor:indigo,fontStyle:"bold",fontSize:8},
-    columnStyles:{0:{halign:"left",fontStyle:"bold"}},
-    styles:{font:"helvetica",cellPadding:3}
-  });
-
-  const finalY = doc.lastAutoTable.finalY+8;
-  doc.setFillColor(248,250,252);
-  doc.roundedRect(14,finalY,182,18,2,2,"F");
-  doc.setDrawColor(...indigo); doc.setLineWidth(0.8);
-  doc.line(14,finalY,14,finalY+18);
-  doc.setFont("helvetica","italic"); doc.setFontSize(8); doc.setTextColor(100,116,139);
-  doc.text("Form Teacher's Remark:",18,finalY+7);
-  doc.setFont("helvetica","normal"); doc.setTextColor(30,41,59);
-  doc.text(remark?.remark||"No remark entered.",18,finalY+13);
-
-  doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(150,150,150);
-  doc.text("Generated by BrightSchool Result System",14,290);
-  doc.text(new Date().toLocaleDateString("en-GB"),196,290,{align:"right"});
-  doc.save(`${student.regNumber}_${termLbl.replace(/ /g,"_")}_Result.pdf`);
 }
 
 loadResult();

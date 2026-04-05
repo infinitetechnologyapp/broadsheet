@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title> Dashboard</title>
+  <title>Admin Dashboard</title>
   <link rel="icon" href="schoolNova.png" type="image/broadsheet-icon" />
   <link rel="stylesheet" href="./style.css"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
@@ -13,7 +13,7 @@
 
 <!-- Auth loading overlay — hidden once Firebase confirms session -->
 <div id="authLoadingOverlay" style="position:fixed;inset:0;background:#ffffff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px">
-  <div style="width:52px;height:52px;border-radius:14px;background:#ffffff;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;color:#fff"><img src="schoolNova2.png" alt="SN" /></div>
+  <div style="width:52px;height:52px;border-radius:14px;background:#ffffff;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;color:#fff"><img src="schoolNova2.png" alt="SchoolNova" /></div>
   <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;color:#1e293b">SchoolNova</div>
   <div style="width:36px;height:36px;border:4px solid #e0e7ff;border-top-color:#4f46e5;border-radius:50%;animation:spin .8s linear infinite"></div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
@@ -27,11 +27,11 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon" id="brandIcon">
-        <img src="schoolNova2.png" onerror="this.style.display='none';this.parentElement.textContent='B'" style="width:100%;height:100%;object-fit:contain;border-radius:8px"/>
+        <img src="./logo.png" onerror="this.style.display='none';this.parentElement.textContent='B'" style="width:100%;height:100%;object-fit:contain;border-radius:8px"/>
       </div>
       <div class="brand-text">
-        <div id="brandName">SchoolNova</div>
-        <div class="brand-sub">Keeping School Records</div>
+        <div id="brandName">Recomella Academy</div>
+        <div class="brand-sub">Determination is the key to success</div>
       </div>
     </div>
     <nav class="sidebar-nav" id="sidebarNav">
@@ -225,7 +225,6 @@
               <button class="btn btn-outline btn-sm" id="qa-scores"><i class="bi bi-pencil-square"></i> Enter Scores</button>
               <button class="btn btn-outline btn-sm" id="qa-broadsheet"><i class="bi bi-table"></i> View Broadsheet</button>
               <button class="btn btn-outline btn-sm" id="qa-attendance"><i class="bi bi-calendar-check-fill"></i> Attendance</button>
-              <button class="btn btn-outline btn-sm" id="qa-results"><i class="bi bi-card-list"></i> Results</button>
               <button class="btn btn-outline btn-sm" id="qa-recordbank"><i class="bi bi-archive-fill"></i> Record Bank</button>
               <button class="btn btn-outline btn-sm" id="qa-approval"><i class="bi bi-patch-check-fill"></i> Manage Approvals</button>
             </div>
@@ -427,7 +426,7 @@
           <div class="card-body" style="padding:0">
             <div class="table-wrap">
               <table class="table">
-                <thead><tr><th>Reg No.</th><th>Student Name</th><th>Arm</th><th>Form Teacher's Remark</th></tr></thead>
+                <thead><tr><th>Reg No.</th><th>Student Name</th><th>Arm</th><th style="text-align:center">Position</th><th>Form Teacher's Remark</th></tr></thead>
                 <tbody id="remarksTable"></tbody>
               </table>
             </div>
@@ -658,12 +657,158 @@
         <div class="card" style="margin-bottom:16px">
           <div class="card-header"><h5><i class="bi bi-building"></i> School Identity</h5></div>
           <div class="card-body">
-            <div class="form-group">
-              <label class="form-label">School Name</label>
-              <input type="text" id="schoolNameInput" class="form-control" placeholder="e.g. Bright Secondary School"/>
-              <small style="color:var(--text-muted);font-size:.75rem">Appears on sidebar and PDF header. Logo is loaded from <code>logo.png</code> in the project folder.</small>
+
+            <!-- Row 1 — School Name + Type -->
+            <div class="grid grid-2">
+              <div class="form-group">
+                <label class="form-label">School Name</label>
+                <input type="text" id="schoolNameInput" class="form-control" placeholder="e.g. Recomella Academy"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">School Type</label>
+                <input type="text" id="schoolTypeInput" class="form-control" placeholder="e.g. Nursery, Basic, Secondary"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">School Address</label>
+                <input type="text" id="schoolAddressInput" class="form-control" placeholder="e.g. Jaka Bus Stop, Akpajo-Eleme, Rivers State"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">School Phone Number</label>
+                <input type="text" id="schoolPhoneInput" class="form-control" placeholder="e.g. 08137211831, 08171721550"/>
+              </div>
+              <div class="form-group" style="grid-column:1/-1">
+                <label class="form-label">School Motto</label>
+                <input type="text" id="schoolMottoInput" class="form-control" placeholder="e.g. Determination is the Key to Success"/>
+              </div>
             </div>
-            <button class="btn btn-primary" id="saveSchoolBtn"><i class="bi bi-save"></i> Save School Name</button>
+
+            <button class="btn btn-primary" id="saveSchoolBtn" style="margin-top:8px"><i class="bi bi-save"></i> Save School Identity</button>
+          </div>
+        </div>
+
+        <!-- Next Term Info + Fees -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h5><i class="bi bi-cash-stack"></i> Next Term Information</h5></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Next Term Begins</label>
+              <input type="date" id="nextTermBeginsInput" class="form-control"/>
+            </div>
+            <div style="font-weight:800;font-size:.85rem;margin:12px 0 8px;color:var(--text)">Next Term Fees (per section)</div>
+            <div class="grid grid-2">
+              <div class="form-group">
+                <label class="form-label">Creche Fees</label>
+                <input type="text" id="feesCrecheInput" class="form-control" placeholder="e.g. ₦45,000"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Nursery Fees</label>
+                <input type="text" id="feesNurseryInput" class="form-control" placeholder="e.g. ₦50,000"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Basic Fees</label>
+                <input type="text" id="feesBasicInput" class="form-control" placeholder="e.g. ₦55,000"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Junior Secondary Fees</label>
+                <input type="text" id="feesJSSInput" class="form-control" placeholder="e.g. ₦60,000"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Senior Secondary Fees</label>
+                <input type="text" id="feesSSSInput" class="form-control" placeholder="e.g. ₦65,000"/>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="saveFeesBtn"><i class="bi bi-save"></i> Save Next Term Info</button>
+          </div>
+        </div>
+
+        <!-- Principal Remarks -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h5><i class="bi bi-chat-quote-fill"></i> Principal's Remarks (Secondary)</h5></div>
+          <div class="card-body">
+            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">
+              Set 4 remarks for different performance levels. The system picks the remark based on the student's position ranking.
+            </p>
+            <div class="form-group">
+              <label class="form-label">Remark 1 — Top performers (1st — 5th position)</label>
+              <input type="text" id="principalRemark1" class="form-control" placeholder="e.g. Excellent performance! Keep it up."/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Remark 2 — Good performers (6th — 10th position)</label>
+              <input type="text" id="principalRemark2" class="form-control" placeholder="e.g. Good performance. Aim higher next term."/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Remark 3 — Average performers (11th — 20th position)</label>
+              <input type="text" id="principalRemark3" class="form-control" placeholder="e.g. Fair performance. More effort is needed."/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Remark 4 — Below average (21st position and below)</label>
+              <input type="text" id="principalRemark4" class="form-control" placeholder="e.g. Poor performance. Study harder next term."/>
+            </div>
+            <button class="btn btn-primary" id="savePrincipalRemarksBtn"><i class="bi bi-save"></i> Save Principal Remarks</button>
+          </div>
+        </div>
+
+        <!-- Head Teacher Remarks -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h5><i class="bi bi-chat-quote-fill"></i> Head Teacher's Remarks (Basic / Nursery / Creche)</h5></div>
+          <div class="card-body">
+            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">
+              Set 4 remarks for different performance levels for Basic, Nursery and Creche students.
+            </p>
+            <div class="form-group">
+              <label class="form-label">Remark 1 — Top performers (1st — 5th position)</label>
+              <input type="text" id="htRemark1" class="form-control" placeholder="e.g. Wonderful! Keep up the great work."/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Remark 2 — Good performers (6th — 10th position)</label>
+              <input type="text" id="htRemark2" class="form-control" placeholder="e.g. Good effort. Keep trying hard."/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Remark 3 — Average performers (11th — 20th position)</label>
+              <input type="text" id="htRemark3" class="form-control" placeholder="e.g. Satisfactory. More reading at home will help."/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Remark 4 — Below average (21st position and below)</label>
+              <input type="text" id="htRemark4" class="form-control" placeholder="e.g. Needs to study more. Parents please assist."/>
+            </div>
+            <button class="btn btn-primary" id="saveHtRemarksBtn"><i class="bi bi-save"></i> Save Head Teacher Remarks</button>
+          </div>
+        </div>
+
+        <!-- Grading System -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h5><i class="bi bi-bar-chart-fill"></i> Grading System</h5></div>
+          <div class="card-body">
+            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">
+              Set the score ranges for each grade. These appear on the report card Keys to Grading section.
+            </p>
+            <div class="grid grid-2">
+              <div class="form-group">
+                <label class="form-label">A — Excellent</label>
+                <input type="text" id="gradeAInput" class="form-control" placeholder="e.g. 86-100"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">B1 — Very Good</label>
+                <input type="text" id="gradeB1Input" class="form-control" placeholder="e.g. 71-85"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">B2 — Good</label>
+                <input type="text" id="gradeB2Input" class="form-control" placeholder="e.g. 61-70"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">C — Credit</label>
+                <input type="text" id="gradeCInput" class="form-control" placeholder="e.g. 50-60"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">D — Pass</label>
+                <input type="text" id="gradeDInput" class="form-control" placeholder="e.g. 39-49"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">F — Fail</label>
+                <input type="text" id="gradeFInput" class="form-control" placeholder="e.g. 0-38"/>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="saveGradingBtn"><i class="bi bi-save"></i> Save Grading System</button>
           </div>
         </div>
 
@@ -812,22 +957,6 @@
             <button class="btn btn-primary mt-3" id="saveSTBtn">
               <i class="bi bi-save"></i> Save Subject Teachers
             </button>
-          </div>
-        </div>
-
-        <!-- Data Repair Tool -->
-        <div class="card" style="margin-top:16px;border-color:var(--warning)">
-          <div class="card-header" style="background:#fffbeb">
-            <h5 style="color:#92400e"><i class="bi bi-wrench-adjustable-circle-fill"></i> Data Repair Tool</h5>
-          </div>
-          <div class="card-body">
-            <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">
-              If students were added before this fix, their <code>classArm</code> may be stored as <strong>"JS 1 A"</strong> instead of <strong>"JS 1A"</strong>. This causes subject teachers to see "no students found". Click below to auto-fix all student records in one go.
-            </p>
-            <button class="btn btn-warning" id="fixClassArmBtn" style="color:#92400e">
-              <i class="bi bi-wrench-adjustable"></i> Fix All Student classArm Values
-            </button>
-            <div id="fixClassArmResult" style="margin-top:10px;font-size:.85rem"></div>
           </div>
         </div>
       </section>
@@ -1225,9 +1354,11 @@
     </div><!-- end main-content -->
 
     <!-- Footer -->
-        <p class="footer-inline" style="text-align:center;font-size:.72rem;color:var(--text-muted);margin-top:20px">
-      &copy; 2026 SchoolNova by Brightest Digital Services. All rights reserved.
-    </p>
+    <div class="footer-inline">
+      <p style="text-align:center;font-size:.72rem;color:var(--text-muted);margin-top:20px">
+   &copy; 2024 SchoolNova by Brightest Digital Services. All rights reserved.
+      </p>
+    </div>
 
   </div><!-- end main-wrapper -->
 </div><!-- end app-layout -->
@@ -1286,6 +1417,11 @@
         <div class="form-group">
           <label class="form-label">Parent/Guardian Phone</label>
           <input type="tel" id="sParentPhone" class="form-control" placeholder="e.g. 08012345678"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Parent/Guardian Email</label>
+          <input type="email" id="sParentEmail" class="form-control" placeholder="e.g. parent@gmail.com"/>
+          <small style="color:var(--text-muted);font-size:.74rem">Used for result card delivery</small>
         </div>
         <div class="form-group" style="grid-column:1/-1">
           <label class="form-label">Parent/Guardian Address</label>
