@@ -218,7 +218,7 @@ async function loadResult() {
     S("rcTerm").textContent    = TERM_LABELS[term] || ("TERM " + term);
 
     // ── STUDENT INFO ───────────────────────────────────────
-    S("rcName").textContent   = student.fullName  || "—";
+   S("rcName").textContent = (student.fullName || "—").toUpperCase();
     S("rcReg").textContent    = student.regNumber || reg;
     S("rcGender").textContent = student.gender    || "—";
     // Class = base only (e.g. "JS 1" not "JS 1A")
