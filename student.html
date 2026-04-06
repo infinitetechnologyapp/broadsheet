@@ -68,13 +68,13 @@
       background:#fff; position:relative; z-index:2;
       margin-bottom:-24px;
     }
-    .rc-school-info { flex:1; padding-left:14px; }
+    .rc-school-info { flex:1; padding-left:10px; }
     .rc-school-name {
-      font-size:18pt; font-weight:900; color:#1E40AF;
+      font-size:15pt; font-weight:900; color:#1E40AF;
       letter-spacing:.4px; line-height:1.15; text-transform:uppercase;
     }
     .rc-school-sub {
-      font-size:7.5pt; color:#000; margin-top:3px; line-height:1.5;
+      font-size:8.5pt; font-weight:700; color:#000; margin-top:3px; line-height:1.55;
     }
 
     /* ── REPORT TITLE: white bg, blue text, blue border ── */
@@ -90,24 +90,29 @@
     /* ── SESSION/TERM ── */
     .rc-session-line {
       display:flex; justify-content:space-between;
-      font-size:10pt; font-weight:800; margin-bottom:3px;
+      font-size:8pt; font-weight:800; margin-bottom:3px;
     }
 
-    /* ── STUDENT INFO — 3 cols, left-pad clears lapping logo ── */
+    /* ── STUDENT INFO — 3 cols, no logo gap (logo floats above via z-index) ── */
     .rc-info-box {
       border:1.5px solid #1E40AF; border-radius:3px;
-      padding:4px 8px; padding-left:88px;
+      padding:5px 10px;           /* uniform padding — no extra left gap */
       margin-bottom:0;
       display:grid; grid-template-columns:1fr 1fr 1fr;
-      gap:3px 12px; font-size:8pt; background:#fff;
+      gap:4px 14px; font-size:9pt; background:#fff;
       position:relative; z-index:1;
     }
-    .rc-info-row { display:flex; gap:4px; align-items:baseline; }
-    .rc-info-label { font-weight:800; white-space:nowrap; color:#1E40AF; font-size:7.5pt; }
+    .rc-info-row { display:flex; gap:5px; align-items:baseline; }
+    .rc-info-label { font-weight:900; white-space:nowrap; color:#1E40AF; font-size:8pt; }
     .rc-info-value {
-      border-bottom:1px solid #94a3b8; flex:1;
-      font-weight:700; padding-bottom:1px; min-width:30px;
+      border-bottom:1.5px solid #94a3b8; flex:1;
+      font-weight:800; padding-bottom:1px; min-width:30px;
+      font-size:9pt;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    /* Name row: larger and bolder for maximum visibility */
+    .rc-info-full .rc-info-value {
+      font-size:10pt; font-weight:900; color:#000;
     }
     .rc-info-full { grid-column:1/-1; }
 
@@ -329,10 +334,6 @@
         <span class="rc-info-value" id="rcReg">—</span>
       </div>
       <div class="rc-info-row">
-        <span class="rc-info-label">Sex:</span>
-        <span class="rc-info-value" id="rcGender">—</span>
-      </div>
-      <div class="rc-info-row">
         <span class="rc-info-label">Class:</span>
         <span class="rc-info-value" id="rcClass">—</span>
       </div>
@@ -341,12 +342,16 @@
         <span class="rc-info-value" id="rcStream">—</span>
       </div>
       <div class="rc-info-row">
-        <span class="rc-info-label">Class Population:</span>
-        <span class="rc-info-value" id="rcPopulation">—</span>
+        <span class="rc-info-label">Sex:</span>
+        <span class="rc-info-value" id="rcGender">—</span>
       </div>
       <div class="rc-info-row">
         <span class="rc-info-label">Position:</span>
         <span class="rc-info-value" id="rcInfoPosition" style="font-weight:900;color:#1E40AF">—</span>
+      </div>
+      <div class="rc-info-row">
+        <span class="rc-info-label">Class Population:</span>
+        <span class="rc-info-value" id="rcPopulation">—</span>
       </div>
     </div>
 
@@ -407,12 +412,12 @@
         <span class="rc-sum-value" id="rcTotal">—</span>
       </div>
       <div class="rc-sum-row">
-        <span class="rc-sum-label">Average Scored:</span>
-        <span class="rc-sum-value" id="rcAverage">—</span>
-      </div>
-      <div class="rc-sum-row">
         <span class="rc-sum-label">Overall Position:</span>
         <span class="rc-sum-value" id="rcPosition">—</span>
+      </div>
+      <div class="rc-sum-row">
+        <span class="rc-sum-label">Average Scored:</span>
+        <span class="rc-sum-value" id="rcAverage">—</span>
       </div>
       <div class="rc-sum-row">
         <span class="rc-sum-label">Out of:</span>
