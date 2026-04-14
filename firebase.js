@@ -6,7 +6,9 @@ import { getFirestore, collection, doc,
          getDoc, getDocs, setDoc, updateDoc,
          deleteDoc, query, where,
          writeBatch, serverTimestamp,
-         enableIndexedDbPersistence }             from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+         initializeFirestore,
+         persistentLocalCache,
+         persistentMultipleTabManager }            from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword,
          createUserWithEmailAndPassword,
          signOut, onAuthStateChanged,
@@ -24,30 +26,25 @@ const firebaseConfig = {
 };
 
 const app  = initializeApp(firebaseConfig);
-export const db              = getFirestore(app);
+
+// ── Firestore with multi-tab safe persistence ──────────────────
+// persistentLocalCache + persistentMultipleTabManager replaces
+// enableIndexedDbPersistence which fails with "failed-precondition"
+// when more than one tab is open (e.g. dashboard + student result tab).
+// The old approach caused the dashboard tab to detect an auth state
+// change when student.html opened, logging the user out.
+// persistentMultipleTabManager handles concurrent tabs cleanly.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
+
 export const firestoreDoc    = doc;
 export const firestoreGetDoc = getDoc;
 export const firestoreCollection = collection;
 export const firestoreGetDocs    = getDocs;
 const auth = getAuth(app);
-
-// Set Auth persistence to LOCAL — user stays logged in
-// even after closing the browser or losing internet briefly
-// This is the key fix for the repeated logout problem
-setPersistence(auth, browserLocalPersistence).catch(function(err) {
-  console.warn("Auth persistence not set:", err);
-});
-
-// Enable offline persistence — auth + data loads from cache on poor network
-enableIndexedDbPersistence(db).catch(function(err) {
-  if (err.code === "failed-precondition") {
-    // Multiple tabs open — persistence only works in one tab at a time
-    console.warn("Offline persistence unavailable: multiple tabs open.");
-  } else if (err.code === "unimplemented") {
-    // Browser doesn't support persistence
-    console.warn("Offline persistence not supported in this browser.");
-  }
-});
 
 export const onAuthChange  = cb    => onAuthStateChanged(auth, cb);
 export const authLogin     = (e,p) => signInWithEmailAndPassword(auth, e, p);

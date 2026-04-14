@@ -533,7 +533,7 @@ async function loadTeachers() {
 
 // School identity state
 let _schoolName  = "Recomella Academy";
-let _schoolLogo  = "./logo.png";
+let _schoolLogo    = "./logo.png";
 let _currentSession = "";  // always holds the active session
 // Grading system — loaded from Firebase settings, used across broadsheet and score entry
 let _grading = { A:"86-100", B1:"71-85", B2:"61-70", C:"50-60", D:"39-49", F:"0-38" };
@@ -2749,7 +2749,7 @@ $("exportPerStudentBtn")?.addEventListener("click", function() {
   var possible = d.possible;
   var showBF   = d.term !== "1";
 
-  wsData.push([(_schoolName||"Recomella Academy").toUpperCase()]);
+  wsData.push([(_schoolName||"BrightSchool").toUpperCase()]);
   wsData.push(["ATTENDANCE SUMMARY — " + d.classBase + " — " + TERM_LABELS[d.term]]);
   wsData.push([""]);
 
@@ -3343,7 +3343,7 @@ $("exportRbStudentBtn")?.addEventListener("click", function() {
   var wsData   = [];
   var possible = d.possible;
 
-  wsData.push([(_schoolName||"Recomella Academy").toUpperCase()]);
+  wsData.push([(_schoolName||"BrightSchool").toUpperCase()]);
   wsData.push(["ATTENDANCE RECORD — " + d.classBase + " — " + TERM_LABELS[d.term] + " — " + d.session]);
   wsData.push([""]);
 
@@ -3488,19 +3488,39 @@ window.assignPendingUser = function(email, uid, roleType) {
   }
   // Mark as approved in Firestore
   approvePendingUser(uid).then(() => loadPendingUsers()).catch(console.error);
-  // Scroll to teacher management section
-  showSection("section-settings");
+  // Scroll to teacher management within Teachers Role section
+  showSection("section-teachers-role");
 };
 
 $("refreshPendingBtn")?.addEventListener("click", loadPendingUsers);
 
-// Load teacher names UI when settings section is opened
+// ── Trigger on section-settings nav click (legacy) ────────────
 document.querySelector('[data-section="section-settings"]')?.addEventListener("click", () => {
+  // Settings section now only has Theme + Change Password — nothing to load
+});
+
+// ── Trigger on section-teachers-role nav click ────────────────
+// Both teacher names and pending users live here now
+document.querySelector('[data-section="section-teachers-role"]')?.addEventListener("click", () => {
   if (_isMaster) {
     loadPendingUsers();
     loadTeacherNamesUI();
   }
 });
+
+// Also trigger when the menu tile for teachers-role is clicked
+// (menu tiles call showSection directly, not nav click events)
+const _origShowSection = window.showSection;
+window.showSection = function(id) {
+  _origShowSection(id);
+  if (id === "section-teachers-role" && _isMaster) {
+    // Small delay to let the section become visible first
+    setTimeout(() => {
+      loadPendingUsers();
+      loadTeacherNamesUI();
+    }, 80);
+  }
+};
 
 // ══════════════════════════════════════════════════════════════
 //  RECORD BANK — Auto-populate session dropdown
