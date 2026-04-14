@@ -3858,7 +3858,7 @@ window.restoreStudentAction = async function(reg) {
 
 // View alumni results — navigate to Results tab with reg number pre-filled
 window.viewAlumniResults = function(reg) {
-  showSection("section-results");
+  showSection("section-print-results");
   var regInput = $("resRegNo");
   if (regInput) { regInput.value = reg; }
   toast("Enter the session and term then click Load Result.", "info");
