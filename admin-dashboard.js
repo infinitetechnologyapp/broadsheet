@@ -4122,7 +4122,7 @@ $("prCheckBtn")?.addEventListener("click", async () => {
     }
 
     // Open result card in new tab
-    const url = "./student.html?reg=" + encodeURIComponent(reg)
+    const url = "./broadsheet/student.html?reg=" + encodeURIComponent(reg)
       + "&term=" + term
       + "&session=" + encodeURIComponent(session);
     window.open(url, "_blank");
