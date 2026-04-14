@@ -1,9 +1,10 @@
 // ============================================================
-//  admin-dashboard.js — SchoolNova Result Broadsheet v3
+//  admin-dashboard.js — BrightSchool Result Broadsheet v3
 //  All 10 issues resolved
 // ============================================================
 import {
   onAuthChange, authLogout,
+  changeUserPassword, getCurrentUser,
   db, firestoreDoc, firestoreGetDoc,
   firestoreCollection, firestoreGetDocs,
   addStudent, updateStudent, deleteStudent, restoreStudent,
@@ -169,23 +170,36 @@ applyLayout();
 
 // ── Section nav ───────────────────────────────────────────────
 window.showSection = id => {
-  if (!_isMaster && (id === "section-settings" || id === "section-recordbank")) return;
+  // Role guard — Admin-only sections
+  const adminOnly = ["section-settings","section-recordbank","section-approval",
+                     "section-promotion","section-alumni","section-teachers-role",
+                     "section-school-config"];
+  if (!_isMaster && adminOnly.includes(id)) return;
+
+  // Print Results guard — not visible to Subject Teachers
+  if (_isST && !_isFT && !_isMaster && id === "section-print-results") return;
+
   // Hide all sections
   document.querySelectorAll(".section").forEach(s => {
     s.classList.remove("active");
     s.style.display = "none";
   });
   document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+
   const target = $(id);
   if (target) {
     target.classList.add("active");
     target.style.display = "block";
   }
   document.querySelector(`[data-section="${id}"]`)?.classList.add("active");
+
+  // Init print results session display when opening that section
+  if (id === "section-print-results") initPrintResultsSection();
+
   if (window.innerWidth < 992) { sidebarOpen = false; applyLayout(); }
 };
 document.querySelectorAll(".nav-item").forEach(item => item.addEventListener("click", () => showSection(item.dataset.section)));
-["scores","broadsheet","attendance","results"].forEach(k => {
+["scores","broadsheet","attendance"].forEach(k => {
   $(`qa-${k}`)?.addEventListener("click", () => showSection(`section-${k}`));
 });
 $("qa-recordbank")?.addEventListener("click", () => showSection("section-recordbank"));
@@ -245,6 +259,7 @@ onAuthChange(async user => {
   }
 
   applyRoleUI();
+  restoreSidebarTheme();
   if (overlay) overlay.style.display = "none";
   await Promise.allSettled([loadSession(), loadStudents()]);
 });
@@ -298,25 +313,49 @@ function applyRoleUI() {
   const tnCard = $("teacherNamesCard");
   if (tnCard) tnCard.style.display = _isMaster ? "block" : "none";
 
-  // Sidebar nav items
-  setDisplayFlex("nav-students",   _isMaster || _isFT);
-  setDisplayFlex("nav-subjects",   _isMaster || _isFT);
-  setDisplayFlex("nav-scores",     _isMaster || _isST || _isFT);
-  setDisplayFlex("nav-remarks",    _isFT);          // Admin does not need remarks — FT only
-  setDisplayFlex("nav-approval",   _isMaster);
-  setDisplayFlex("nav-promotion",  _isMaster);
-  setDisplayFlex("nav-alumni",     _isMaster);
-  setDisplayFlex("nav-results",    _isFT);           // Admin does not need results — FT only
-  setDisplayFlex("nav-exam",        _isMaster || _isFT);
-  setDisplayFlex("nav-settings",   _isMaster);
-  setDisplayFlex("nav-broadsheet", true);
-  setDisplayFlex("nav-attendance", _isMaster || _isFT);
-  setDisplayFlex("nav-recordbank", _isMaster);
+  // Sidebar nav visibility — 16 items per spec
+  setDisplayFlex("nav-menu",           true);                        // 1. All roles
+  setDisplayFlex("nav-dashboard",      true);                        // 2. All roles
+  setDisplayFlex("nav-students",       _isMaster || _isFT);          // 3. Admin + FT
+  setDisplayFlex("nav-subjects",       _isMaster || _isFT);          // 4. Admin + FT
+  setDisplayFlex("nav-scores",         true);                        // 5. All roles
+  setDisplayFlex("nav-broadsheet",     true);                        // 6. All roles
+  setDisplayFlex("nav-attendance",     _isMaster || _isFT);          // 7. Admin + FT
+  setDisplayFlex("nav-exam",           true);                        // 8. All roles
+  setDisplayFlex("nav-approval",       _isMaster);                   // 9. Admin only
+  setDisplayFlex("nav-recordbank",     _isMaster);                   // 10. Admin only
+  setDisplayFlex("nav-promotion",      _isMaster);                   // 11. Admin only
+  setDisplayFlex("nav-alumni",         _isMaster);                   // 12. Admin only
+  setDisplayFlex("nav-print-results",  _isMaster || _isFT);          // 13. Admin + FT
+  setDisplayFlex("nav-teachers-role",  _isMaster);                   // 14. Admin only
+  setDisplayFlex("nav-school-config",  _isMaster);                   // 15. Admin only
+  setDisplayFlex("nav-settings",       true);                        // 16. All roles
 
-  // Quick access — role based
-  // Admin: all buttons
-  // Form Teacher: scores, broadsheet, attendance, results
-  // Subject Teacher: scores, broadsheet only
+  // Menu tiles — match sidebar visibility
+  setDisplay("menu-students",      _isMaster || _isFT);
+  setDisplay("menu-add-student",   _isMaster || _isFT);
+  setDisplay("menu-subjects",      _isMaster || _isFT);
+  setDisplay("menu-attendance",    _isMaster || _isFT);
+  setDisplay("menu-approval",      _isMaster);
+  setDisplay("menu-recordbank",    _isMaster);
+  setDisplay("menu-promotion",     _isMaster);
+  setDisplay("menu-alumni",        _isMaster);
+  setDisplay("menu-print-results", _isMaster || _isFT);
+  setDisplay("menu-teachers-role", _isMaster);
+  setDisplay("menu-school-config", _isMaster);
+
+  // Print Results role note
+  const prNote = $("printResultsRoleNote");
+  if (prNote) {
+    if (_isMaster) prNote.textContent = " — Admin: check any student's result.";
+    else if (_isFT) prNote.textContent = ` — Form Teacher: results for ${_ftClass} only.`;
+  }
+
+  // Print Results class arm selector — FT: only their class, Admin: all
+  const prCard = $("prClassPrintCard");
+  if (prCard) prCard.style.display = (_isFT || _isMaster) ? "block" : "none";
+
+  // Quick access — keep backward compat
   setDisplay("qa-scores",     _isMaster || _isST || _isFT);
   setDisplay("qa-broadsheet", true);
   setDisplay("qa-attendance", _isMaster || _isFT);
@@ -494,7 +533,7 @@ async function loadTeachers() {
 
 // School identity state
 let _schoolName  = "Recomella Academy";
-let _schoolLogo  = "./schlogo.png";
+let _schoolLogo  = "./logo.png";
 let _currentSession = "";  // always holds the active session
 // Grading system — loaded from Firebase settings, used across broadsheet and score entry
 let _grading = { A:"86-100", B1:"71-85", B2:"61-70", C:"50-60", D:"39-49", F:"0-38" };
@@ -1512,7 +1551,7 @@ $("downloadExcelBtn").addEventListener("click", async function() {
     var wsData = [];
 
     // HEADER
-    wsData.push([(_schoolName || "Recomella Academy").toUpperCase()]);
+    wsData.push([(_schoolName || "BrightSchool").toUpperCase()]);
     wsData.push(["RESULT BROADSHEET"]);
     wsData.push(["Session: " + (sessionData.session||"-") + "  |  Term: " + TERM_LABELS[term] + "  |  Class: " + classArm]);
     wsData.push(["Form Teacher: " + ftEmail]);
@@ -1569,7 +1608,7 @@ $("downloadExcelBtn").addEventListener("click", async function() {
     // FOOTER
     wsData.push([""]);
     wsData.push(["Signature: ___________________________"]);
-    wsData.push(["Generated by SchoolNova Broadsheet System"]);
+    wsData.push(["Developed by Brightest Digital Services"]);
     wsData.push(["Date Generated: " + new Date().toLocaleDateString("en-GB", {day:"2-digit",month:"long",year:"numeric"})]);
 
     // BUILD WORKBOOK
@@ -2737,7 +2776,7 @@ $("exportPerStudentBtn")?.addEventListener("click", function() {
 
   wsData.push([""]);
   wsData.push(["Generated: " + new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})]);
-  wsData.push(["Generated by SchoolNova Attendance Records"]);
+  wsData.push(["Developed by Brightest Digital Services"]);
 
   var wb  = XLSX.utils.book_new();
   var ws  = XLSX.utils.aoa_to_sheet(wsData);
@@ -3324,7 +3363,7 @@ $("exportRbStudentBtn")?.addEventListener("click", function() {
 
   wsData.push([""]);
   wsData.push(["Generated: " + new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})]);
-  wsData.push(["Generated by SchoolNova Record Bank"]);
+  wsData.push(["Developed by Brightest Digital Services"]);
 
   var wb = XLSX.utils.book_new();
   var ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -4000,3 +4039,270 @@ $("loadResultBtn")?.addEventListener("click", async () => {
     btn.innerHTML = "<i class='bi bi-search'></i> Load Result";
   }
 });
+
+// ══════════════════════════════════════════════════════════════
+//  MENU — Add Student shortcut
+// ══════════════════════════════════════════════════════════════
+window.openAddStudentFromMenu = function() {
+  showSection("section-students");
+  // Small delay so section is visible before modal opens
+  setTimeout(() => { $("addStudentBtn")?.click(); }, 120);
+};
+
+// ══════════════════════════════════════════════════════════════
+//  PRINT RESULTS SECTION
+// ══════════════════════════════════════════════════════════════
+async function initPrintResultsSection() {
+  // Always fetch fresh session from Firestore (or cache) so term reflects
+  // whatever Admin has currently set — not stale values
+  const s = _sessionCache || await getSession().catch(() => null);
+  const currentTerm    = s?.currentTerm    || "1";
+  const currentSession = s?.session        || _currentSession || "";
+
+  // ── Session badge ──────────────────────────────────────────
+  const sessionDisplay = $("prSessionText");
+  if (sessionDisplay) {
+    sessionDisplay.textContent = currentSession || "Not set";
+  }
+
+  // ── Individual result checker term ─────────────────────────
+  // Automatically selects the current Admin term from Firestore
+  const prTermEl = $("prTermInput");
+  if (prTermEl) prTermEl.value = currentTerm;
+
+  // ── Class print term ────────────────────────────────────────
+  // Also auto-selects the Admin current term from Firestore
+  const prClassTermEl = $("prClassTerm");
+  if (prClassTermEl) prClassTermEl.value = currentTerm;
+
+  // ── Populate class arm selector ────────────────────────────
+  const armEl = $("prClassArm");
+  if (armEl && armEl.options.length <= 1) {
+    const arms = _isMaster ? ALL_ARMS
+               : _isFT    ? ALL_ARMS.filter(a => armToBase(a) === _ftClass)
+               : [];
+    armEl.innerHTML = arms.map(a => `<option value="${a}">${a}</option>`).join("");
+  }
+}
+
+// Individual result check & open in new tab
+$("prCheckBtn")?.addEventListener("click", async () => {
+  const reg     = ($("prRegInput")?.value || "").trim().toUpperCase();
+  const term    = $("prTermInput")?.value;
+  const session = _sessionCache?.session || _currentSession || "";
+  const errBox  = $("prError");
+  const errMsg  = $("prErrorMsg");
+
+  const showErr = msg => {
+    errMsg.textContent = msg;
+    errBox.classList.remove("hidden");
+    setTimeout(() => errBox.classList.add("hidden"), 5000);
+  };
+
+  errBox?.classList.add("hidden");
+
+  if (!reg)  { showErr("Please enter a registration number."); return; }
+  if (!term) { showErr("Please select a term."); return; }
+  if (!session) { showErr("Session not loaded yet. Please wait."); return; }
+
+  const btn = $("prCheckBtn"); btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block"></span> Checking…';
+
+  try {
+    const student = await getStudentByReg(reg);
+    if (!student) { showErr("Registration number not found. Please check and try again."); return; }
+
+    // FT can only print their own class
+    if (_isFT && !_isMaster) {
+      const studentBase = armToBase(student.classArm || "");
+      if (studentBase !== _ftClass) {
+        showErr("You can only view results for students in your class (" + _ftClass + ").");
+        return;
+      }
+    }
+
+    // Open result card in new tab
+    const url = "../student.html?reg=" + encodeURIComponent(reg)
+      + "&term=" + term
+      + "&session=" + encodeURIComponent(session);
+    window.open(url, "_blank");
+    toast("Result card opened in new tab for " + (student.fullName || reg) + ".", "success");
+
+  } catch(e) { showErr("Could not connect. Please try again."); console.error(e); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-search"></i> Check &amp; Open Result';
+  }
+});
+
+// Load all students in class for class-wide print
+$("prLoadClassBtn")?.addEventListener("click", async () => {
+  const classArm = $("prClassArm")?.value;
+  const term     = $("prClassTerm")?.value;
+  const session  = _sessionCache?.session || _currentSession || "";
+  if (!classArm || !term) { toast("Select class arm and term.", "error"); return; }
+
+  const btn = $("prLoadClassBtn"); btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block"></span> Loading…';
+
+  try {
+    const students = await getStudentsByClassArm(classArm);
+    const sorted   = students.sort((a,b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
+
+    const container = $("prClassStudentList");
+    if (!sorted.length) {
+      container.innerHTML = '<p style="color:var(--text-muted);font-size:.85rem">No students found in this class arm.</p>';
+      return;
+    }
+
+    container.innerHTML = sorted.map(s =>
+      `<button class="btn btn-outline btn-sm" style="font-size:.78rem" onclick="window.open('../student.html?reg=${encodeURIComponent(s.regNumber)}&term=${term}&session=${encodeURIComponent(session)}','_blank')">
+        <i class="bi bi-printer"></i> ${s.fullName || s.regNumber}
+      </button>`
+    ).join("");
+
+    toast(sorted.length + " students loaded. Click any name to open their result card.", "success");
+  } catch(e) { toast(e.message, "error"); console.error(e); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Students';
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  SIDEBAR THEME — localStorage persisted per user
+// ══════════════════════════════════════════════════════════════
+const THEME_CONFIGS = {
+  white:  { bg:"#ffffff", text:"#1e293b", active:"#4f46e5", activeTxt:"#4f46e5", activeBg:"#ede9fe", border:"#e2e8f0", hover:"#ede9fe", brand:"#1e293b", sub:"#64748b" },
+  blue:   { bg:"#1E40AF", text:"#bfdbfe", active:"#ffffff", activeTxt:"#1E40AF", activeBg:"rgba(255,255,255,0.18)", border:"rgba(255,255,255,0.15)", hover:"rgba(255,255,255,0.12)", brand:"#ffffff", sub:"#bfdbfe" },
+  navy:   { bg:"#0f172a", text:"#94a3b8", active:"#ffffff", activeTxt:"#0f172a", activeBg:"rgba(255,255,255,0.12)", border:"rgba(255,255,255,0.08)", hover:"rgba(255,255,255,0.08)", brand:"#ffffff", sub:"#64748b" },
+  dark:   { bg:"#1e293b", text:"#94a3b8", active:"#ffffff", activeTxt:"#1e293b", activeBg:"rgba(255,255,255,0.12)", border:"rgba(255,255,255,0.08)", hover:"rgba(255,255,255,0.08)", brand:"#ffffff", sub:"#64748b" },
+  purple: { bg:"#7c3aed", text:"#e9d5ff", active:"#ffffff", activeTxt:"#7c3aed", activeBg:"rgba(255,255,255,0.18)", border:"rgba(255,255,255,0.15)", hover:"rgba(255,255,255,0.12)", brand:"#ffffff", sub:"#e9d5ff" },
+  orange: { bg:"#ea580c", text:"#fed7aa", active:"#ffffff", activeTxt:"#ea580c", activeBg:"rgba(255,255,255,0.18)", border:"rgba(255,255,255,0.15)", hover:"rgba(255,255,255,0.12)", brand:"#ffffff", sub:"#fed7aa" },
+};
+
+window.applySidebarTheme = function(theme) {
+  const cfg = THEME_CONFIGS[theme];
+  if (!cfg) return;
+  const sidebar  = $("sidebar");
+  const style    = sidebar?.style;
+  if (!style) return;
+
+  // Apply CSS variables scoped to sidebar via inline style
+  sidebar.setAttribute("data-theme", theme);
+
+  // Inject dynamic style block
+  let styleEl = document.getElementById("sidebarThemeStyle");
+  if (!styleEl) {
+    styleEl = document.createElement("style");
+    styleEl.id = "sidebarThemeStyle";
+    document.head.appendChild(styleEl);
+  }
+
+  styleEl.textContent = `
+    .sidebar {
+      background: ${cfg.bg} !important;
+      border-right-color: ${cfg.border} !important;
+    }
+    .sidebar .sidebar-brand {
+      border-bottom-color: ${cfg.border} !important;
+    }
+    .sidebar .brand-text, .sidebar .brand-text div {
+      color: ${cfg.brand} !important;
+    }
+    .sidebar .brand-sub {
+      color: ${cfg.sub} !important;
+    }
+    .sidebar .nav-item {
+      color: ${cfg.text} !important;
+    }
+    .sidebar .nav-item:hover {
+      background: ${cfg.hover} !important;
+      color: ${cfg.active} !important;
+    }
+    .sidebar .nav-item.active {
+      background: ${cfg.activeBg} !important;
+      color: ${cfg.active} !important;
+    }
+    .sidebar .sidebar-footer {
+      border-top-color: ${cfg.border} !important;
+    }
+    .sidebar .btn-logout {
+      background: rgba(255,255,255,0.1) !important;
+      color: ${cfg.text} !important;
+    }
+    .sidebar .btn-logout:hover {
+      background: rgba(239,68,68,0.85) !important;
+      color: #fff !important;
+    }
+    .theme-btn[data-theme="${theme}"] {
+      outline: 3px solid #4f46e5;
+      outline-offset: 2px;
+    }
+  `;
+
+  // Remove active outline from all other theme buttons
+  document.querySelectorAll(".theme-btn").forEach(b => {
+    b.style.outline = b.dataset.theme === theme ? "3px solid #4f46e5" : "";
+  });
+
+  // Save per-user to localStorage
+  const userKey = "sidebarTheme_" + (_user?.uid || "guest");
+  localStorage.setItem(userKey, theme);
+  toast("Theme changed to " + theme.charAt(0).toUpperCase() + theme.slice(1) + ".", "success");
+};
+
+// Restore sidebar theme from localStorage on login
+function restoreSidebarTheme() {
+  const userKey = "sidebarTheme_" + (_user?.uid || "guest");
+  const saved   = localStorage.getItem(userKey);
+  if (saved && THEME_CONFIGS[saved]) applySidebarTheme(saved);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CHANGE PASSWORD
+// ══════════════════════════════════════════════════════════════
+$("changePasswordBtn")?.addEventListener("click", async () => {
+  const current  = $("currentPasswordInput")?.value || "";
+  const newPw    = $("newPasswordInput")?.value || "";
+  const confirm  = $("confirmPasswordInput")?.value || "";
+
+  if (!current)         { toast("Please enter your current password.", "error"); return; }
+  if (!newPw)           { toast("Please enter a new password.", "error"); return; }
+  if (newPw.length < 6) { toast("New password must be at least 6 characters.", "error"); return; }
+  if (newPw !== confirm) { toast("New passwords do not match.", "error"); return; }
+  if (current === newPw) { toast("New password must be different from current password.", "error"); return; }
+
+  const btn = $("changePasswordBtn"); btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block"></span> Updating…';
+
+  try {
+    await changeUserPassword(current, newPw);
+    // Clear fields on success
+    $("currentPasswordInput").value = "";
+    $("newPasswordInput").value     = "";
+    $("confirmPasswordInput").value = "";
+    toast("Password updated successfully. You are still logged in.", "success");
+  } catch(e) {
+    if (e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
+      toast("Current password is incorrect. Please try again.", "error");
+    } else if (e.code === "auth/too-many-requests") {
+      toast("Too many failed attempts. Please wait a few minutes and try again.", "error");
+    } else {
+      toast("Could not update password: " + e.message, "error");
+    }
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-lock-fill"></i> Update Password';
+  }
+});
+
+// Toggle password visibility helper (used in settings)
+window.togglePwVis = function(inputId, btn) {
+  const input = $(inputId);
+  if (!input) return;
+  const isText = input.type === "text";
+  input.type = isText ? "password" : "text";
+  btn.innerHTML = isText ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
+};

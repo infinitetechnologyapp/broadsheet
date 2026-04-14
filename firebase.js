@@ -10,6 +10,8 @@ import { getFirestore, collection, doc,
 import { getAuth, signInWithEmailAndPassword,
          createUserWithEmailAndPassword,
          signOut, onAuthStateChanged,
+         updatePassword, reauthenticateWithCredential,
+         EmailAuthProvider,
          browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -47,10 +49,20 @@ enableIndexedDbPersistence(db).catch(function(err) {
   }
 });
 
-export const onAuthChange = cb    => onAuthStateChanged(auth, cb);
-export const authLogin    = (e,p) => signInWithEmailAndPassword(auth, e, p);
-export const authLogout   = ()    => signOut(auth);
+export const onAuthChange  = cb    => onAuthStateChanged(auth, cb);
+export const authLogin     = (e,p) => signInWithEmailAndPassword(auth, e, p);
+export const authLogout    = ()    => signOut(auth);
 export const createAccount = (e,p) => createUserWithEmailAndPassword(auth, e, p).then(r => r.user);
+export const getCurrentUser = ()   => auth.currentUser;
+
+// Change password — reauthenticate first then update
+export async function changeUserPassword(currentPassword, newPassword) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("No user is logged in.");
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await updatePassword(user, newPassword);
+}
 
 // PENDING USERS — teachers who signed up and await role assignment
 export async function savePendingUser(data) {

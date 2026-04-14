@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Admin Dashboard</title>
-  <link rel="icon" href="schoolNova.png" type="image/broadsheet-icon" />
+  <title>SchoolNova Dashboard</title>
+  <link rel="icon" href="schoolNova.png" type="image/broadsheet-icon"/>
   <link rel="stylesheet" href="./style.css"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -13,7 +13,7 @@
 
 <!-- Auth loading overlay — hidden once Firebase confirms session -->
 <div id="authLoadingOverlay" style="position:fixed;inset:0;background:#ffffff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px">
-  <div style="width:52px;height:52px;border-radius:14px;background:#ffffff;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;color:#fff"><img src="schoolNova2.png" alt="SchoolNova" /></div>
+  <div style="width:52px;height:52px;border-radius:14px;background:#ffffff;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;color:#fff"><img src="schoolNova2.png" alt="SN" /></div>
   <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;color:#1e293b">SchoolNova</div>
   <div style="width:36px;height:36px;border:4px solid #e0e7ff;border-top-color:#4f46e5;border-radius:50%;animation:spin .8s linear infinite"></div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
@@ -31,24 +31,26 @@
       </div>
       <div class="brand-text">
         <div id="brandName">Recomella Academy</div>
-        <div class="brand-sub">Determination is the key to success</div>
+        <div class="brand-sub">Determination is the key to Success</div>
       </div>
     </div>
     <nav class="sidebar-nav" id="sidebarNav">
-      <div class="nav-item active" data-section="section-dashboard"><i class="bi bi-grid-fill"></i><span>Dashboard</span></div>
-      <div class="nav-item" data-section="section-students"   id="nav-students"><i class="bi bi-people-fill"></i><span>Students</span></div>
-      <div class="nav-item" data-section="section-subjects"   id="nav-subjects"><i class="bi bi-book-fill"></i><span>Subjects</span></div>
-      <div class="nav-item" data-section="section-scores"     id="nav-scores"><i class="bi bi-pencil-square"></i><span>Enter Scores</span></div>
-      <div class="nav-item" data-section="section-broadsheet" id="nav-broadsheet"><i class="bi bi-table"></i><span>Broadsheet</span></div>
-      <div class="nav-item" data-section="section-remarks"    id="nav-remarks"><i class="bi bi-chat-left-quote-fill"></i><span>Remarks</span></div>
-      <div class="nav-item" data-section="section-results"    id="nav-results"><i class="bi bi-card-list"></i><span>Results</span></div>
-      <div class="nav-item" data-section="section-attendance" id="nav-attendance"><i class="bi bi-calendar-check-fill"></i><span>Attendance</span></div>
-      <div class="nav-item" data-section="section-exam"       id="nav-exam"><i class="bi bi-journal-text"></i><span>Exam</span></div>
-      <div class="nav-item" data-section="section-approval"   id="nav-approval"><i class="bi bi-patch-check-fill"></i><span>Approvals</span></div>
-      <div class="nav-item" data-section="section-recordbank" id="nav-recordbank"><i class="bi bi-archive-fill"></i><span>Record Bank</span></div>
-      <div class="nav-item" data-section="section-promotion"  id="nav-promotion"><i class="bi bi-arrow-up-circle-fill"></i><span>Promotion</span></div>
-      <div class="nav-item" data-section="section-alumni"     id="nav-alumni"><i class="bi bi-mortarboard-fill"></i><span>Alumni</span></div>
-      <div class="nav-item" data-section="section-settings"   id="nav-settings"><i class="bi bi-gear-fill"></i><span>Settings</span></div>
+      <div class="nav-item active" data-section="section-menu"       id="nav-menu"><i class="bi bi-grid-3x3-gap-fill"></i><span>Menu</span></div>
+      <div class="nav-item" data-section="section-dashboard"         id="nav-dashboard"><i class="bi bi-speedometer2"></i><span>Dashboard</span></div>
+      <div class="nav-item" data-section="section-students"          id="nav-students"><i class="bi bi-people-fill"></i><span>Students</span></div>
+      <div class="nav-item" data-section="section-subjects"          id="nav-subjects"><i class="bi bi-book-fill"></i><span>Subjects</span></div>
+      <div class="nav-item" data-section="section-scores"            id="nav-scores"><i class="bi bi-pencil-square"></i><span>Enter Scores</span></div>
+      <div class="nav-item" data-section="section-broadsheet"        id="nav-broadsheet"><i class="bi bi-table"></i><span>Broadsheet</span></div>
+      <div class="nav-item" data-section="section-attendance"        id="nav-attendance"><i class="bi bi-calendar-check-fill"></i><span>Attendance</span></div>
+      <div class="nav-item" data-section="section-exam"              id="nav-exam"><i class="bi bi-journal-text"></i><span>Exam</span></div>
+      <div class="nav-item" data-section="section-approval"          id="nav-approval"><i class="bi bi-patch-check-fill"></i><span>Approvals</span></div>
+      <div class="nav-item" data-section="section-recordbank"        id="nav-recordbank"><i class="bi bi-archive-fill"></i><span>Record Bank</span></div>
+      <div class="nav-item" data-section="section-promotion"         id="nav-promotion"><i class="bi bi-arrow-up-circle-fill"></i><span>Promotion</span></div>
+      <div class="nav-item" data-section="section-alumni"            id="nav-alumni"><i class="bi bi-mortarboard-fill"></i><span>Alumni</span></div>
+      <div class="nav-item" data-section="section-print-results"     id="nav-print-results"><i class="bi bi-printer-fill"></i><span>Print Results</span></div>
+      <div class="nav-item" data-section="section-teachers-role"     id="nav-teachers-role"><i class="bi bi-person-badge-fill"></i><span>Teachers Role</span></div>
+      <div class="nav-item" data-section="section-school-config"     id="nav-school-config"><i class="bi bi-building-gear"></i><span>School Config</span></div>
+      <div class="nav-item" data-section="section-settings"          id="nav-settings"><i class="bi bi-gear-fill"></i><span>Settings</span></div>
     </nav>
     <div class="sidebar-footer">
       <button class="btn-logout" id="logoutBtn"><i class="bi bi-box-arrow-left"></i> Logout</button>
@@ -72,8 +74,97 @@
 
     <div class="main-content">
 
+      <!-- MENU — default landing page, all roles -->
+      <section class="section active" id="section-menu">
+        <div class="page-title"><i class="bi bi-grid-3x3-gap-fill" style="color:var(--primary)"></i> Menu</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:14px;padding:4px 0" id="menuGrid">
+
+          <!-- Dashboard -->
+          <div class="menu-tile" onclick="showSection('section-dashboard')">
+            <i class="bi bi-speedometer2"></i>
+            <span>Dashboard</span>
+          </div>
+          <!-- Students — Admin + FT -->
+          <div class="menu-tile" id="menu-students" onclick="showSection('section-students')">
+            <i class="bi bi-people-fill"></i>
+            <span>Students</span>
+          </div>
+          <!-- Add Student shortcut — Admin + FT -->
+          <div class="menu-tile" id="menu-add-student" onclick="openAddStudentFromMenu()">
+            <i class="bi bi-person-plus-fill"></i>
+            <span>Add Student</span>
+          </div>
+          <!-- Subjects — Admin + FT -->
+          <div class="menu-tile" id="menu-subjects" onclick="showSection('section-subjects')">
+            <i class="bi bi-book-fill"></i>
+            <span>Subjects</span>
+          </div>
+          <!-- Enter Scores — all roles -->
+          <div class="menu-tile" onclick="showSection('section-scores')">
+            <i class="bi bi-pencil-square"></i>
+            <span>Enter Scores</span>
+          </div>
+          <!-- Broadsheet — all roles -->
+          <div class="menu-tile" onclick="showSection('section-broadsheet')">
+            <i class="bi bi-table"></i>
+            <span>Broadsheet</span>
+          </div>
+          <!-- Attendance — Admin + FT -->
+          <div class="menu-tile" id="menu-attendance" onclick="showSection('section-attendance')">
+            <i class="bi bi-calendar-check-fill"></i>
+            <span>Attendance</span>
+          </div>
+          <!-- Exam — all roles -->
+          <div class="menu-tile" onclick="showSection('section-exam')">
+            <i class="bi bi-journal-text"></i>
+            <span>Exam</span>
+          </div>
+          <!-- Approvals — Admin only -->
+          <div class="menu-tile" id="menu-approval" onclick="showSection('section-approval')">
+            <i class="bi bi-patch-check-fill"></i>
+            <span>Approvals</span>
+          </div>
+          <!-- Record Bank — Admin only -->
+          <div class="menu-tile" id="menu-recordbank" onclick="showSection('section-recordbank')">
+            <i class="bi bi-archive-fill"></i>
+            <span>Record Bank</span>
+          </div>
+          <!-- Promotion — Admin only -->
+          <div class="menu-tile" id="menu-promotion" onclick="showSection('section-promotion')">
+            <i class="bi bi-arrow-up-circle-fill"></i>
+            <span>Promotion</span>
+          </div>
+          <!-- Alumni — Admin only -->
+          <div class="menu-tile" id="menu-alumni" onclick="showSection('section-alumni')">
+            <i class="bi bi-mortarboard-fill"></i>
+            <span>Alumni</span>
+          </div>
+          <!-- Print Results — Admin + FT -->
+          <div class="menu-tile" id="menu-print-results" onclick="showSection('section-print-results')">
+            <i class="bi bi-printer-fill"></i>
+            <span>Print Results</span>
+          </div>
+          <!-- Teachers Role — Admin only -->
+          <div class="menu-tile" id="menu-teachers-role" onclick="showSection('section-teachers-role')">
+            <i class="bi bi-person-badge-fill"></i>
+            <span>Teachers Role</span>
+          </div>
+          <!-- School Config — Admin only -->
+          <div class="menu-tile" id="menu-school-config" onclick="showSection('section-school-config')">
+            <i class="bi bi-building-gear"></i>
+            <span>School Config</span>
+          </div>
+          <!-- Settings — all roles -->
+          <div class="menu-tile" onclick="showSection('section-settings')">
+            <i class="bi bi-gear-fill"></i>
+            <span>Settings</span>
+          </div>
+
+        </div>
+      </section>
+
       <!-- DASHBOARD -->
-      <section class="section active" id="section-dashboard">
+      <section class="section" id="section-dashboard">
         <div class="page-title"><i class="bi bi-grid-fill" style="color:var(--primary)"></i> Dashboard</div>
 
         <!-- SHARED: Total Students, Male, Female + Current Week — visible to ALL roles -->
@@ -625,10 +716,13 @@
       </section>
 
       <!-- SETTINGS — Admin only, hidden by default -->
-      <section class="section" id="section-settings" style="display:none">
-        <div class="page-title"><i class="bi bi-gear-fill" style="color:var(--primary)"></i> Settings</div>
+      <!-- ════════════════════════════════════════════════════
+           TEACHERS ROLE — Admin only
+      ════════════════════════════════════════════════════ -->
+      <section class="section" id="section-teachers-role" style="display:none">
+        <div class="page-title"><i class="bi bi-person-badge-fill" style="color:var(--primary)"></i> Teachers Role</div>
 
-        <!-- Pending Users — Admin only -->
+        <!-- Pending Users -->
         <div class="card" style="margin-bottom:16px;border-color:#f59e0b" id="pendingUsersCard">
           <div class="card-header" style="background:#fffbeb">
             <h5 style="color:#92400e"><i class="bi bi-person-exclamation-fill"></i> Pending User Approvals</h5>
@@ -639,7 +733,7 @@
           </div>
         </div>
 
-        <!-- Teacher Names — Admin only -->
+        <!-- Teacher Display Names -->
         <div class="card" style="margin-bottom:16px" id="teacherNamesCard">
           <div class="card-header">
             <h5><i class="bi bi-person-badge-fill" style="color:var(--primary)"></i> Teacher Display Names</h5>
@@ -647,205 +741,14 @@
           </div>
           <div class="card-body">
             <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">
-              Enter display names for teachers added directly in Firebase. Their name will appear at the top of their dashboard instead of their email.
+              Enter display names for teachers. Their name will appear at the top of their dashboard instead of their email.
             </p>
             <div id="teacherNamesList"></div>
           </div>
         </div>
 
-        <!-- School Identity -->
+        <!-- Form Teacher Roles -->
         <div class="card" style="margin-bottom:16px">
-          <div class="card-header"><h5><i class="bi bi-building"></i> School Identity</h5></div>
-          <div class="card-body">
-
-            <!-- Row 1 — School Name + Type -->
-            <div class="grid grid-2">
-              <div class="form-group">
-                <label class="form-label">School Name</label>
-                <input type="text" id="schoolNameInput" class="form-control" placeholder="e.g. Recomella Academy"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">School Type</label>
-                <input type="text" id="schoolTypeInput" class="form-control" placeholder="e.g. Nursery, Basic, Secondary"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">School Address</label>
-                <input type="text" id="schoolAddressInput" class="form-control" placeholder="e.g. Jaka Bus Stop, Akpajo-Eleme, Rivers State"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">School Phone Number</label>
-                <input type="text" id="schoolPhoneInput" class="form-control" placeholder="e.g. 08137211831, 08171721550"/>
-              </div>
-              <div class="form-group" style="grid-column:1/-1">
-                <label class="form-label">School Motto</label>
-                <input type="text" id="schoolMottoInput" class="form-control" placeholder="e.g. Determination is the Key to Success"/>
-              </div>
-            </div>
-
-            <button class="btn btn-primary" id="saveSchoolBtn" style="margin-top:8px"><i class="bi bi-save"></i> Save School Identity</button>
-          </div>
-        </div>
-
-        <!-- Next Term Info + Fees -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-header"><h5><i class="bi bi-cash-stack"></i> Next Term Information</h5></div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label">Next Term Begins</label>
-              <input type="date" id="nextTermBeginsInput" class="form-control"/>
-            </div>
-            <div style="font-weight:800;font-size:.85rem;margin:12px 0 8px;color:var(--text)">Next Term Fees (per section)</div>
-            <div class="grid grid-2">
-              <div class="form-group">
-                <label class="form-label">Creche Fees</label>
-                <input type="text" id="feesCrecheInput" class="form-control" placeholder="e.g. ₦45,000"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Nursery Fees</label>
-                <input type="text" id="feesNurseryInput" class="form-control" placeholder="e.g. ₦50,000"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Basic Fees</label>
-                <input type="text" id="feesBasicInput" class="form-control" placeholder="e.g. ₦55,000"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Junior Secondary Fees</label>
-                <input type="text" id="feesJSSInput" class="form-control" placeholder="e.g. ₦60,000"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Senior Secondary Fees</label>
-                <input type="text" id="feesSSSInput" class="form-control" placeholder="e.g. ₦65,000"/>
-              </div>
-            </div>
-            <button class="btn btn-primary" id="saveFeesBtn"><i class="bi bi-save"></i> Save Next Term Info</button>
-          </div>
-        </div>
-
-        <!-- Principal Remarks -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-header"><h5><i class="bi bi-chat-quote-fill"></i> Principal's Remarks (Secondary)</h5></div>
-          <div class="card-body">
-            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">
-              Set 4 remarks for different performance levels. The system picks the remark based on the student's position ranking.
-            </p>
-            <div class="form-group">
-              <label class="form-label">Remark 1 — Top performers (1st — 5th position)</label>
-              <input type="text" id="principalRemark1" class="form-control" placeholder="e.g. Excellent performance! Keep it up."/>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Remark 2 — Good performers (6th — 10th position)</label>
-              <input type="text" id="principalRemark2" class="form-control" placeholder="e.g. Good performance. Aim higher next term."/>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Remark 3 — Average performers (11th — 20th position)</label>
-              <input type="text" id="principalRemark3" class="form-control" placeholder="e.g. Fair performance. More effort is needed."/>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Remark 4 — Below average (21st position and below)</label>
-              <input type="text" id="principalRemark4" class="form-control" placeholder="e.g. Poor performance. Study harder next term."/>
-            </div>
-            <button class="btn btn-primary" id="savePrincipalRemarksBtn"><i class="bi bi-save"></i> Save Principal Remarks</button>
-          </div>
-        </div>
-
-        <!-- Head Teacher Remarks -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-header"><h5><i class="bi bi-chat-quote-fill"></i> Head Teacher's Remarks (Basic / Nursery / Creche)</h5></div>
-          <div class="card-body">
-            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">
-              Set 4 remarks for different performance levels for Basic, Nursery and Creche students.
-            </p>
-            <div class="form-group">
-              <label class="form-label">Remark 1 — Top performers (1st — 5th position)</label>
-              <input type="text" id="htRemark1" class="form-control" placeholder="e.g. Wonderful! Keep up the great work."/>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Remark 2 — Good performers (6th — 10th position)</label>
-              <input type="text" id="htRemark2" class="form-control" placeholder="e.g. Good effort. Keep trying hard."/>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Remark 3 — Average performers (11th — 20th position)</label>
-              <input type="text" id="htRemark3" class="form-control" placeholder="e.g. Satisfactory. More reading at home will help."/>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Remark 4 — Below average (21st position and below)</label>
-              <input type="text" id="htRemark4" class="form-control" placeholder="e.g. Needs to study more. Parents please assist."/>
-            </div>
-            <button class="btn btn-primary" id="saveHtRemarksBtn"><i class="bi bi-save"></i> Save Head Teacher Remarks</button>
-          </div>
-        </div>
-
-        <!-- Grading System -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-header"><h5><i class="bi bi-bar-chart-fill"></i> Grading System</h5></div>
-          <div class="card-body">
-            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">
-              Set the score ranges for each grade. These appear on the report card Keys to Grading section.
-            </p>
-            <div class="grid grid-2">
-              <div class="form-group">
-                <label class="form-label">A — Excellent</label>
-                <input type="text" id="gradeAInput" class="form-control" placeholder="e.g. 86-100"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">B1 — Very Good</label>
-                <input type="text" id="gradeB1Input" class="form-control" placeholder="e.g. 71-85"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">B2 — Good</label>
-                <input type="text" id="gradeB2Input" class="form-control" placeholder="e.g. 61-70"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">C — Credit</label>
-                <input type="text" id="gradeCInput" class="form-control" placeholder="e.g. 50-60"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">D — Pass</label>
-                <input type="text" id="gradeDInput" class="form-control" placeholder="e.g. 39-49"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">F — Fail</label>
-                <input type="text" id="gradeFInput" class="form-control" placeholder="e.g. 0-38"/>
-              </div>
-            </div>
-            <button class="btn btn-primary" id="saveGradingBtn"><i class="bi bi-save"></i> Save Grading System</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header"><h5><i class="bi bi-calendar3"></i> Academic Session</h5></div>
-          <div class="card-body">
-            <div class="grid grid-2">
-              <div class="form-group">
-                <label class="form-label">Session</label>
-                <input type="text" id="sessionInput" class="form-control" placeholder="e.g. 2024/2025"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Current Term</label>
-                <select id="termInput" class="form-select">
-                  <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Term Resumption Date</label>
-                <input type="date" id="termStartDate" class="form-control"/>
-                <small style="color:var(--text-muted);font-size:.75rem">First day school opens this term</small>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Term Closing Date</label>
-                <input type="date" id="termEndDate" class="form-control"/>
-                <small style="color:var(--text-muted);font-size:.75rem">Last day of school this term</small>
-              </div>
-            </div>
-            <div id="termWeeksInfo" style="display:none;background:var(--primary-light);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:.85rem;font-weight:700;color:var(--primary)">
-              <i class="bi bi-calendar-week"></i> <span id="termWeeksText"></span>
-            </div>
-            <button class="btn btn-primary" id="saveSessionBtn"><i class="bi bi-save"></i> Save Session</button>
-          </div>
-        </div>
-
-        <!-- Teacher Management -->
-        <div class="card" style="margin-top:16px">
           <div class="card-header">
             <h5><i class="bi bi-people-fill" style="color:var(--primary)"></i> Form Teacher Roles</h5>
           </div>
@@ -853,8 +756,6 @@
             <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">
               Assign teacher emails to classes. Each form teacher can add students, enter scores and remarks for their class (Arms A &amp; B).
             </p>
-
-            <!-- Add new form teacher -->
             <div class="grid grid-3 mb-3" style="align-items:flex-end">
               <div class="form-group" style="margin-bottom:0">
                 <label class="form-label">Teacher Email</label>
@@ -864,52 +765,32 @@
                 <label class="form-label">Class</label>
                 <select id="newFTClass" class="form-select">
                   <option value="">Select Class</option>
-                  <optgroup label="Senior Secondary">
-                    <option>SS 1</option><option>SS 2</option><option>SS 3</option>
-                  </optgroup>
-                  <optgroup label="Junior Secondary">
-                    <option>JS 1</option><option>JS 2</option><option>JS 3</option>
-                  </optgroup>
-                  <optgroup label="Basic">
-                    <option>Basic 1</option><option>Basic 2</option><option>Basic 3</option><option>Basic 4</option><option>Basic 5</option>
-                  </optgroup>
-                  <optgroup label="Nursery">
-                    <option>Nursery 1</option><option>Nursery 2</option><option>Nursery 3</option>
-                  </optgroup>
-                  <optgroup label="Creche">
-                    <option>Creche</option>
-                  </optgroup>
+                  <optgroup label="Senior Secondary"><option>SS 1</option><option>SS 2</option><option>SS 3</option></optgroup>
+                  <optgroup label="Junior Secondary"><option>JS 1</option><option>JS 2</option><option>JS 3</option></optgroup>
+                  <optgroup label="Basic"><option>Basic 1</option><option>Basic 2</option><option>Basic 3</option><option>Basic 4</option><option>Basic 5</option></optgroup>
+                  <optgroup label="Nursery"><option>Nursery 1</option><option>Nursery 2</option><option>Nursery 3</option></optgroup>
+                  <optgroup label="Creche"><option>Creche</option></optgroup>
                 </select>
               </div>
-              <button class="btn btn-success btn-sm" onclick="addFTRow()" style="height:38px">
-                <i class="bi bi-plus-circle"></i> Add
-              </button>
+              <button class="btn btn-success btn-sm" onclick="addFTRow()" style="height:38px"><i class="bi bi-plus-circle"></i> Add</button>
             </div>
-
-            <!-- Existing form teachers table -->
             <div class="table-wrap">
-              <table class="table">
-                <thead><tr><th>Email</th><th>Class</th><th></th></tr></thead>
-                <tbody id="ftTeacherBody"></tbody>
-              </table>
+              <table class="table"><thead><tr><th>Email</th><th>Class</th><th></th></tr></thead>
+              <tbody id="ftTeacherBody"></tbody></table>
             </div>
-
-            <button class="btn btn-primary mt-3" id="saveTeachersBtn">
-              <i class="bi bi-save"></i> Save Form Teachers
-            </button>
+            <button class="btn btn-primary mt-3" id="saveTeachersBtn"><i class="bi bi-save"></i> Save Form Teachers</button>
           </div>
         </div>
 
-        <!-- Subject Teacher Management -->
-        <div class="card" style="margin-top:16px">
+        <!-- Subject Teacher Roles -->
+        <div class="card">
           <div class="card-header">
             <h5><i class="bi bi-book-fill" style="color:var(--success)"></i> Subject Teacher Roles</h5>
           </div>
           <div class="card-body">
             <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px">
-              Add a subject teacher by entering their email, selecting their section, loading the subjects saved for that section, then choosing which subjects they teach.
+              Add a subject teacher by entering their email, selecting their section, loading the subjects for that section, then choosing which subjects they teach.
             </p>
-
             <div class="grid grid-2 mb-2">
               <div class="form-group">
                 <label class="form-label">Teacher Email</label>
@@ -928,35 +809,253 @@
                 </select>
               </div>
             </div>
-
             <div class="form-group mb-3">
               <label class="form-label">Subjects</label>
               <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-                <button class="btn btn-outline btn-sm" id="loadSTSubjectsBtn" onclick="loadSTSubjects()">
-                  <i class="bi bi-arrow-clockwise"></i> Load Subjects
-                </button>
+                <button class="btn btn-outline btn-sm" id="loadSTSubjectsBtn" onclick="loadSTSubjects()"><i class="bi bi-arrow-clockwise"></i> Load Subjects</button>
                 <span id="loadSTSubjectsHint" style="font-size:.78rem;color:var(--text-muted)">Select a section first, then load subjects</span>
               </div>
-              <div id="stSubjectsCheckboxWrap" style="display:none;flex-wrap:wrap;gap:8px;padding:12px;background:var(--bg);border-radius:8px;border:1.5px solid var(--border)">
-                <!-- Checkboxes populated dynamically -->
+              <div id="stSubjectsCheckboxWrap" style="display:none;flex-wrap:wrap;gap:8px;padding:12px;background:var(--bg);border-radius:8px;border:1.5px solid var(--border)"></div>
+            </div>
+            <button class="btn btn-success btn-sm" onclick="addSTRow()"><i class="bi bi-plus-circle"></i> Add Subject Teacher</button>
+            <div class="table-wrap" style="margin-top:16px">
+              <table class="table"><thead><tr><th>Email</th><th>Section</th><th>Subjects</th><th></th></tr></thead>
+              <tbody id="stTeacherBody"></tbody></table>
+            </div>
+            <button class="btn btn-primary mt-3" id="saveSTBtn"><i class="bi bi-save"></i> Save Subject Teachers</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════
+           SCHOOL CONFIG — Admin only
+      ════════════════════════════════════════════════════ -->
+      <section class="section" id="section-school-config" style="display:none">
+        <div class="page-title"><i class="bi bi-building-gear" style="color:var(--primary)"></i> School Config</div>
+
+        <!-- School Identity -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h5><i class="bi bi-building"></i> School Identity</h5></div>
+          <div class="card-body">
+            <div class="grid grid-2">
+              <div class="form-group"><label class="form-label">School Name</label><input type="text" id="schoolNameInput" class="form-control" placeholder="e.g. Recomella Academy"/></div>
+              <div class="form-group"><label class="form-label">School Type</label><input type="text" id="schoolTypeInput" class="form-control" placeholder="e.g. Nursery, Basic, Secondary"/></div>
+              <div class="form-group"><label class="form-label">School Address</label><input type="text" id="schoolAddressInput" class="form-control" placeholder="e.g. Jaka Bus Stop, Akpajo-Eleme, Rivers State"/></div>
+              <div class="form-group"><label class="form-label">School Phone Number</label><input type="text" id="schoolPhoneInput" class="form-control" placeholder="e.g. 08137211831"/></div>
+              <div class="form-group" style="grid-column:1/-1"><label class="form-label">School Motto</label><input type="text" id="schoolMottoInput" class="form-control" placeholder="e.g. Determination is the Key to Success"/></div>
+            </div>
+            <button class="btn btn-primary" id="saveSchoolBtn" style="margin-top:8px"><i class="bi bi-save"></i> Save School Identity</button>
+          </div>
+        </div>
+
+        <!-- Academic Session -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h5><i class="bi bi-calendar3"></i> Academic Session</h5></div>
+          <div class="card-body">
+            <div class="grid grid-2">
+              <div class="form-group"><label class="form-label">Session</label><input type="text" id="sessionInput" class="form-control" placeholder="e.g. 2024/2025"/></div>
+              <div class="form-group">
+                <label class="form-label">Current Term</label>
+                <select id="termInput" class="form-select">
+                  <option value="1">1st Term</option><option value="2">2nd Term</option><option value="3">3rd Term</option>
+                </select>
+              </div>
+              <div class="form-group"><label class="form-label">Term Resumption Date</label><input type="date" id="termStartDate" class="form-control"/><small style="color:var(--text-muted);font-size:.75rem">First day school opens this term</small></div>
+              <div class="form-group"><label class="form-label">Term Closing Date</label><input type="date" id="termEndDate" class="form-control"/><small style="color:var(--text-muted);font-size:.75rem">Last day of school this term</small></div>
+            </div>
+            <div id="termWeeksInfo" style="display:none;background:var(--primary-light);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:.85rem;font-weight:700;color:var(--primary)">
+              <i class="bi bi-calendar-week"></i> <span id="termWeeksText"></span>
+            </div>
+            <button class="btn btn-primary" id="saveSessionBtn"><i class="bi bi-save"></i> Save Session</button>
+          </div>
+        </div>
+
+        <!-- Next Term Info + Fees -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h5><i class="bi bi-cash-stack"></i> Next Term Information</h5></div>
+          <div class="card-body">
+            <div class="form-group"><label class="form-label">Next Term Begins</label><input type="date" id="nextTermBeginsInput" class="form-control"/></div>
+            <div style="font-weight:800;font-size:.85rem;margin:12px 0 8px;color:var(--text)">Next Term Fees (per section)</div>
+            <div class="grid grid-2">
+              <div class="form-group"><label class="form-label">Creche Fees</label><input type="text" id="feesCrecheInput" class="form-control" placeholder="e.g. ₦45,000"/></div>
+              <div class="form-group"><label class="form-label">Nursery Fees</label><input type="text" id="feesNurseryInput" class="form-control" placeholder="e.g. ₦50,000"/></div>
+              <div class="form-group"><label class="form-label">Basic Fees</label><input type="text" id="feesBasicInput" class="form-control" placeholder="e.g. ₦55,000"/></div>
+              <div class="form-group"><label class="form-label">Junior Secondary Fees</label><input type="text" id="feesJSSInput" class="form-control" placeholder="e.g. ₦60,000"/></div>
+              <div class="form-group"><label class="form-label">Senior Secondary Fees</label><input type="text" id="feesSSSInput" class="form-control" placeholder="e.g. ₦65,000"/></div>
+            </div>
+            <button class="btn btn-primary" id="saveFeesBtn"><i class="bi bi-save"></i> Save Next Term Info</button>
+          </div>
+        </div>
+
+        <!-- Principal Remarks -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h5><i class="bi bi-chat-quote-fill"></i> Principal's Remarks (Secondary)</h5></div>
+          <div class="card-body">
+            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">Set 4 remarks for different performance levels. The system picks the remark based on the student's position ranking.</p>
+            <div class="form-group"><label class="form-label">Remark 1 — Top performers (1st — 5th)</label><input type="text" id="principalRemark1" class="form-control" placeholder="e.g. Excellent performance! Keep it up."/></div>
+            <div class="form-group"><label class="form-label">Remark 2 — Good performers (6th — 10th)</label><input type="text" id="principalRemark2" class="form-control" placeholder="e.g. Good performance. Aim higher next term."/></div>
+            <div class="form-group"><label class="form-label">Remark 3 — Average performers (11th — 20th)</label><input type="text" id="principalRemark3" class="form-control" placeholder="e.g. Fair performance. More effort needed."/></div>
+            <div class="form-group"><label class="form-label">Remark 4 — Below average (21st and below)</label><input type="text" id="principalRemark4" class="form-control" placeholder="e.g. Poor performance. Study harder."/></div>
+            <button class="btn btn-primary" id="savePrincipalRemarksBtn"><i class="bi bi-save"></i> Save Principal Remarks</button>
+          </div>
+        </div>
+
+        <!-- Head Teacher Remarks -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h5><i class="bi bi-chat-quote-fill"></i> Head Teacher's Remarks (Basic / Nursery / Creche)</h5></div>
+          <div class="card-body">
+            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">Set 4 remarks for different performance levels for Basic, Nursery and Creche students.</p>
+            <div class="form-group"><label class="form-label">Remark 1 — Top performers (1st — 5th)</label><input type="text" id="htRemark1" class="form-control" placeholder="e.g. Wonderful! Keep up the great work."/></div>
+            <div class="form-group"><label class="form-label">Remark 2 — Good performers (6th — 10th)</label><input type="text" id="htRemark2" class="form-control" placeholder="e.g. Good effort. Keep trying hard."/></div>
+            <div class="form-group"><label class="form-label">Remark 3 — Average performers (11th — 20th)</label><input type="text" id="htRemark3" class="form-control" placeholder="e.g. Satisfactory. More reading at home will help."/></div>
+            <div class="form-group"><label class="form-label">Remark 4 — Below average (21st and below)</label><input type="text" id="htRemark4" class="form-control" placeholder="e.g. Needs to study more. Parents please assist."/></div>
+            <button class="btn btn-primary" id="saveHtRemarksBtn"><i class="bi bi-save"></i> Save Head Teacher Remarks</button>
+          </div>
+        </div>
+
+        <!-- Grading System -->
+        <div class="card">
+          <div class="card-header"><h5><i class="bi bi-bar-chart-fill"></i> Grading System</h5></div>
+          <div class="card-body">
+            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">Set the score ranges for each grade. These appear on the report card grading key.</p>
+            <div class="grid grid-2">
+              <div class="form-group"><label class="form-label">A — Excellent</label><input type="text" id="gradeAInput" class="form-control" placeholder="e.g. 86-100"/></div>
+              <div class="form-group"><label class="form-label">B1 — Very Good</label><input type="text" id="gradeB1Input" class="form-control" placeholder="e.g. 71-85"/></div>
+              <div class="form-group"><label class="form-label">B2 — Good</label><input type="text" id="gradeB2Input" class="form-control" placeholder="e.g. 61-70"/></div>
+              <div class="form-group"><label class="form-label">C — Credit</label><input type="text" id="gradeCInput" class="form-control" placeholder="e.g. 50-60"/></div>
+              <div class="form-group"><label class="form-label">D — Pass</label><input type="text" id="gradeDInput" class="form-control" placeholder="e.g. 39-49"/></div>
+              <div class="form-group"><label class="form-label">F — Fail</label><input type="text" id="gradeFInput" class="form-control" placeholder="e.g. 0-38"/></div>
+            </div>
+            <button class="btn btn-primary" id="saveGradingBtn"><i class="bi bi-save"></i> Save Grading System</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════
+           PRINT RESULTS — Admin + FT
+      ════════════════════════════════════════════════════ -->
+      <section class="section" id="section-print-results">
+        <div class="page-title"><i class="bi bi-printer-fill" style="color:var(--primary)"></i> Print Results</div>
+        <div class="card mb-3">
+          <div class="card-header"><h5><i class="bi bi-person-lines-fill"></i> Student Result Checker</h5></div>
+          <div class="card-body">
+            <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px">
+              Enter a student Registration Number to view and print their result card.
+              <span id="printResultsRoleNote" style="color:var(--primary);font-weight:700"></span>
+            </p>
+            <div class="grid grid-2">
+              <div class="form-group">
+                <label class="form-label">Registration Number</label>
+                <input type="text" id="prRegInput" class="form-control" placeholder="e.g. JS1A2024001" style="text-transform:uppercase"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Academic Session</label>
+                <div style="background:var(--primary-light);border:1.5px solid #bfdbfe;border-radius:8px;padding:9px 14px;font-weight:800;font-size:.9rem;color:var(--primary);display:flex;align-items:center;gap:8px">
+                  <i class="bi bi-calendar3"></i>
+                  <span id="prSessionText">Loading…</span>
+                </div>
+                <small style="color:var(--text-muted);font-size:.74rem">Current session set by Admin</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Term</label>
+                <select id="prTermInput" class="form-select">
+                  <option value="">Select Term</option>
+                  <option value="1">1st Term</option>
+                  <option value="2">2nd Term</option>
+                  <option value="3">3rd Term</option>
+                </select>
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end">
+                <button class="btn btn-primary" style="width:100%" id="prCheckBtn">
+                  <i class="bi bi-search"></i> Check &amp; Open Result
+                </button>
               </div>
             </div>
-
-            <button class="btn btn-success btn-sm" onclick="addSTRow()">
-              <i class="bi bi-plus-circle"></i> Add Subject Teacher
-            </button>
-
-            <!-- Existing subject teachers table -->
-            <div class="table-wrap" style="margin-top:16px">
-              <table class="table">
-                <thead><tr><th>Email</th><th>Section</th><th>Subjects</th><th></th></tr></thead>
-                <tbody id="stTeacherBody"></tbody>
-              </table>
+            <div id="prError" class="alert alert-error mb-2 hidden" style="margin-top:8px">
+              <i class="bi bi-exclamation-circle-fill"></i>
+              <span id="prErrorMsg"></span>
             </div>
+          </div>
+        </div>
 
-            <button class="btn btn-primary mt-3" id="saveSTBtn">
-              <i class="bi bi-save"></i> Save Subject Teachers
-            </button>
+        <!-- FT: class arm quick-print — all students in class -->
+        <div class="card" id="prClassPrintCard" style="display:none">
+          <div class="card-header"><h5><i class="bi bi-people-fill"></i> Print All Results for My Class</h5></div>
+          <div class="card-body">
+            <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px">
+              Quickly open the result card for each student in your class one by one.
+            </p>
+            <div class="grid grid-2 mb-3">
+              <div class="form-group">
+                <label class="form-label">Class Arm</label>
+                <select id="prClassArm" class="form-select"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Term</label>
+                <select id="prClassTerm" class="form-select">
+                  <option value="1">1st Term</option>
+                  <option value="2">2nd Term</option>
+                  <option value="3">3rd Term</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-outline btn-sm" id="prLoadClassBtn"><i class="bi bi-arrow-clockwise"></i> Load Students</button>
+            <div id="prClassStudentList" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════
+           SETTINGS — all roles (theme + change password)
+      ════════════════════════════════════════════════════ -->
+      <section class="section" id="section-settings" style="display:none">
+        <div class="page-title"><i class="bi bi-gear-fill" style="color:var(--primary)"></i> Settings</div>
+
+        <!-- Sidebar Theme -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h5><i class="bi bi-palette-fill"></i> Sidebar Theme</h5></div>
+          <div class="card-body">
+            <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px">Choose a sidebar colour theme. Your choice is saved automatically.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:12px" id="themePickerRow">
+              <button class="theme-btn" data-theme="white"   onclick="applySidebarTheme('white')"  ><span class="theme-swatch" style="background:#fff;border:2px solid #e2e8f0"></span>White</button>
+              <button class="theme-btn" data-theme="blue"    onclick="applySidebarTheme('blue')"   ><span class="theme-swatch" style="background:#1E40AF"></span>Blue</button>
+              <button class="theme-btn" data-theme="navy"    onclick="applySidebarTheme('navy')"   ><span class="theme-swatch" style="background:#0f172a"></span>Navy</button>
+              <button class="theme-btn" data-theme="dark"    onclick="applySidebarTheme('dark')"   ><span class="theme-swatch" style="background:#1e293b"></span>Dark</button>
+              <button class="theme-btn" data-theme="purple"  onclick="applySidebarTheme('purple')" ><span class="theme-swatch" style="background:#7c3aed"></span>Purple</button>
+              <button class="theme-btn" data-theme="orange"  onclick="applySidebarTheme('orange')" ><span class="theme-swatch" style="background:#ea580c"></span>Orange</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Change Password -->
+        <div class="card">
+          <div class="card-header"><h5><i class="bi bi-lock-fill"></i> Change Password</h5></div>
+          <div class="card-body">
+            <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px">Enter your current password to verify your identity, then set a new password.</p>
+            <div class="grid grid-2">
+              <div class="form-group">
+                <label class="form-label">Current Password</label>
+                <div class="input-wrap">
+                  <input type="password" id="currentPasswordInput" class="form-control" placeholder="Enter current password"/>
+                  <button class="toggle-pw" onclick="togglePwVis('currentPasswordInput',this)" tabindex="-1"><i class="bi bi-eye"></i></button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">New Password</label>
+                <div class="input-wrap">
+                  <input type="password" id="newPasswordInput" class="form-control" placeholder="At least 6 characters"/>
+                  <button class="toggle-pw" onclick="togglePwVis('newPasswordInput',this)" tabindex="-1"><i class="bi bi-eye"></i></button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Confirm New Password</label>
+                <div class="input-wrap">
+                  <input type="password" id="confirmPasswordInput" class="form-control" placeholder="Repeat new password"/>
+                  <button class="toggle-pw" onclick="togglePwVis('confirmPasswordInput',this)" tabindex="-1"><i class="bi bi-eye"></i></button>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="changePasswordBtn"><i class="bi bi-lock-fill"></i> Update Password</button>
           </div>
         </div>
       </section>
@@ -1155,86 +1254,6 @@
         </div>
       </section>
 
-      <!-- RESULTS — Admin and Form Teachers only -->
-      <section class="section" id="section-results">
-        <div class="page-title"><i class="bi bi-card-list" style="color:var(--primary)"></i> Results</div>
-        <div class="card mb-3">
-          <div class="card-header"><h5><i class="bi bi-search"></i> Load Student Result</h5></div>
-          <div class="card-body">
-            <div class="grid grid-4">
-              <div class="form-group">
-                <label class="form-label">Registration Number</label>
-                <input type="text" id="resRegNo" class="form-control" placeholder="e.g. SS1A2024001" style="text-transform:uppercase"/>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Academic Session</label>
-                <select id="resSession" class="form-select">
-                  <option value="">Loading sessions...</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Term</label>
-                <select id="resTerm" class="form-select">
-                  <option value="1">1st Term</option>
-                  <option value="2">2nd Term</option>
-                  <option value="3">3rd Term</option>
-                </select>
-              </div>
-              <div class="form-group" style="display:flex;align-items:flex-end">
-                <button class="btn btn-primary" style="width:100%" id="loadResultBtn">
-                  <i class="bi bi-search"></i> Load Result
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Result Display -->
-        <div id="resultDisplay" style="display:none">
-
-          <!-- Student Info Card -->
-          <div class="card mb-3">
-            <div class="card-body">
-              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px" id="resStudentInfo"></div>
-            </div>
-          </div>
-
-          <!-- Scores Table -->
-          <div class="card mb-3">
-            <div class="card-header">
-              <h5><i class="bi bi-table"></i> Academic Scores</h5>
-            </div>
-            <div class="card-body" style="padding:0">
-              <div class="table-wrap">
-                <table class="table">
-                  <thead>
-                    <tr>
-                      <th>Subject</th>
-                      <th style="text-align:center">1st Test<br><small>/20</small></th>
-                      <th style="text-align:center">2nd Test<br><small>/20</small></th>
-                      <th style="text-align:center">Exam<br><small>/60</small></th>
-                      <th style="text-align:center">Total<br><small>/100</small></th>
-                      <th style="text-align:center">Grade</th>
-                    </tr>
-                  </thead>
-                  <tbody id="resScoreTbody"></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <!-- Summary -->
-          <div class="card mb-3">
-            <div class="card-header"><h5><i class="bi bi-bar-chart-fill"></i> Summary</h5></div>
-            <div class="card-body">
-              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px" id="resSummaryCards"></div>
-              <div style="margin-top:16px;padding:14px;background:#f8fafc;border-radius:8px;border-left:4px solid var(--primary)" id="resRemarkBox"></div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
       <!-- EXAM — Admin and Form Teachers only -->
       <section class="section" id="section-exam">
         <div class="page-title"><i class="bi bi-journal-text" style="color:var(--primary)"></i> Exam</div>
@@ -1356,7 +1375,7 @@
     <!-- Footer -->
     <div class="footer-inline">
       <p style="text-align:center;font-size:.72rem;color:var(--text-muted);margin-top:20px">
-   &copy; 2024 SchoolNova by Brightest Digital Services. All rights reserved.
+  &copy; 2024 SchoolNova by Brightest Digital Services. All rights reserved.
       </p>
     </div>
 
