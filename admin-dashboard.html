@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SchoolNova Dashboard</title>
-  <link rel="icon" href="schoolNova.png" type="image/broadsheet-icon"/>
+  <link rel="icon" href="schoolNova.png" type="image/broadsheet-icon" />
   <link rel="stylesheet" href="./style.css"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -13,7 +13,7 @@
 
 <!-- Auth loading overlay — hidden once Firebase confirms session -->
 <div id="authLoadingOverlay" style="position:fixed;inset:0;background:#ffffff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px">
-  <div style="width:52px;height:52px;border-radius:14px;background:#ffffff;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;color:#fff"><img src="schoolNova2.png" alt="SN" /></div>
+  <div style="width:52px;height:52px;border-radius:14px;background:#fffff;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;color:#fff"><img src="schoolNova2.png" alt="SN" /></div>
   <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;color:#1e293b">SchoolNova</div>
   <div style="width:36px;height:36px;border:4px solid #e0e7ff;border-top-color:#4f46e5;border-radius:50%;animation:spin .8s linear infinite"></div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
@@ -31,7 +31,7 @@
       </div>
       <div class="brand-text">
         <div id="brandName">Recomella Academy</div>
-        <div class="brand-sub">Determination is the key to Success</div>
+        <div class="brand-sub">Determination is the Key to Success</div>
       </div>
     </div>
     <nav class="sidebar-nav" id="sidebarNav">
@@ -42,6 +42,7 @@
       <div class="nav-item" data-section="section-scores"            id="nav-scores"><i class="bi bi-pencil-square"></i><span>Enter Scores</span></div>
       <div class="nav-item" data-section="section-broadsheet"        id="nav-broadsheet"><i class="bi bi-table"></i><span>Broadsheet</span></div>
       <div class="nav-item" data-section="section-attendance"        id="nav-attendance"><i class="bi bi-calendar-check-fill"></i><span>Attendance</span></div>
+      <div class="nav-item" data-section="section-remarks"          id="nav-remarks"><i class="bi bi-chat-left-quote-fill"></i><span>Remarks</span></div>
       <div class="nav-item" data-section="section-exam"              id="nav-exam"><i class="bi bi-journal-text"></i><span>Exam</span></div>
       <div class="nav-item" data-section="section-approval"          id="nav-approval"><i class="bi bi-patch-check-fill"></i><span>Approvals</span></div>
       <div class="nav-item" data-section="section-recordbank"        id="nav-recordbank"><i class="bi bi-archive-fill"></i><span>Record Bank</span></div>
@@ -113,6 +114,11 @@
           <div class="menu-tile" id="menu-attendance" onclick="showSection('section-attendance')">
             <i class="bi bi-calendar-check-fill"></i>
             <span>Attendance</span>
+          </div>
+          <!-- Remarks — FT only -->
+          <div class="menu-tile" id="menu-remarks" onclick="showSection('section-remarks')">
+            <i class="bi bi-chat-left-quote-fill"></i>
+            <span>Remarks</span>
           </div>
           <!-- Exam — all roles -->
           <div class="menu-tile" onclick="showSection('section-exam')">
@@ -517,7 +523,7 @@
           <div class="card-body" style="padding:0">
             <div class="table-wrap">
               <table class="table">
-                <thead><tr><th>Reg No.</th><th>Student Name</th><th>Arm</th><th style="text-align:center">Position</th><th>Form Teacher's Remark</th></tr></thead>
+                <thead><tr><th>Reg No.</th><th>Student Name</th><th style="text-align:center">Position</th><th>Form Teacher's Remark</th></tr></thead>
                 <tbody id="remarksTable"></tbody>
               </table>
             </div>
@@ -1254,6 +1260,7 @@
         </div>
       </section>
 
+      <!-- RESULTS — Admin and Form Teachers only -->
       <!-- EXAM — Admin and Form Teachers only -->
       <section class="section" id="section-exam">
         <div class="page-title"><i class="bi bi-journal-text" style="color:var(--primary)"></i> Exam</div>
@@ -1376,7 +1383,7 @@
     <div class="footer-inline">
       <p style="text-align:center;font-size:.72rem;color:var(--text-muted);margin-top:20px">
   &copy; 2024 SchoolNova by Brightest Digital Services. All rights reserved.
-      </p>
+</p>
     </div>
 
   </div><!-- end main-wrapper -->
