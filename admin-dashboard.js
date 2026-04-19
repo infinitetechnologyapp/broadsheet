@@ -4144,7 +4144,7 @@ $("prCheckBtn")?.addEventListener("click", async () => {
     }
 
     // Open result card in new tab
-    const url = "../student.html?reg=" + encodeURIComponent(reg)
+    const url = "./student.html?reg=" + encodeURIComponent(reg)
       + "&term=" + term
       + "&session=" + encodeURIComponent(session);
     window.open(url, "_blank");
@@ -4178,7 +4178,7 @@ $("prLoadClassBtn")?.addEventListener("click", async () => {
     }
 
     container.innerHTML = sorted.map(s =>
-      `<button class="btn btn-outline btn-sm" style="font-size:.78rem" onclick="window.open('../student.html?reg=${encodeURIComponent(s.regNumber)}&term=${term}&session=${encodeURIComponent(session)}','_blank')">
+      `<button class="btn btn-outline btn-sm" style="font-size:.78rem" onclick="window.open('./student.html?reg=${encodeURIComponent(s.regNumber)}&term=${term}&session=${encodeURIComponent(session)}','_blank')">
         <i class="bi bi-printer"></i> ${s.fullName || s.regNumber}
       </button>`
     ).join("");
