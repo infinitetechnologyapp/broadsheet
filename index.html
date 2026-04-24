@@ -4,165 +4,1449 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SchoolNova</title>
-  <link rel="icon" href="schoolNova.png" type="image/broadsheet-icon" />
-  <link rel="stylesheet" href="style.css"/>
+  <link rel="icon" href="schoolNova.png" type="image/png"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+
+  <style>
+    /* =============================================
+       CSS VARIABLES & RESET
+    ============================================= */
+    :root {
+      --primary:        #4f46e5;
+      --primary-dark:   #3730a3;
+      --primary-light:  #eef2ff;
+      --accent:         #06b6d4;
+      --accent2:        #f59e0b;
+      --success:        #10b981;
+      --danger:         #ef4444;
+      --bg:             #f8fafc;
+      --surface:        #ffffff;
+      --surface2:       #f1f5f9;
+      --border:         #e2e8f0;
+      --text:           #0f172a;
+      --text-muted:     #64748b;
+      --text-light:     #94a3b8;
+      --radius:         14px;
+      --radius-lg:      22px;
+      --shadow-sm:      0 1px 4px rgba(0,0,0,.06);
+      --shadow-md:      0 4px 20px rgba(0,0,0,.10);
+      --shadow-lg:      0 12px 40px rgba(0,0,0,.15);
+      --nav-h:          68px;
+      --font-head:      'Sora', sans-serif;
+      --font-body:      'DM Sans', sans-serif;
+      --transition:     all .3s cubic-bezier(.4,0,.2,1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    img { max-width: 100%; display: block; }
+    a { text-decoration: none; }
+
+    /* =============================================
+       ANIMATIONS
+    ============================================= */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(28px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse-ring {
+      0%   { transform: scale(1); opacity: .7; }
+      70%  { transform: scale(1.35); opacity: 0; }
+      100% { transform: scale(1.35); opacity: 0; }
+    }
+    @keyframes marquee {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+    @keyframes shimmer {
+      0%   { background-position: -200% 0; }
+      100% { background-position:  200% 0; }
+    }
+
+    .fade-up {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity .6s ease, transform .6s ease;
+    }
+    .fade-up.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* =============================================
+       STICKY HEADER / NAVBAR
+    ============================================= */
+    .sn-header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: var(--nav-h);
+      z-index: 1000;
+      background: var(--surface);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-bottom: 1px solid transparent;
+      transition: var(--transition), box-shadow .3s;
+    }
+    .sn-header.scrolled {
+      background: rgba(255,255,255,.96);
+      border-bottom-color: var(--border);
+      box-shadow: 0 2px 24px rgba(79,70,229,.10);
+    }
+
+    .sn-nav {
+      max-width: 1160px;
+      margin: 0 auto;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+
+    /* Logo */
+    .sn-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-head);
+      font-weight: 800;
+      font-size: 1.18rem;
+      color: var(--text);
+      letter-spacing: -.5px;
+    }
+    .sn-logo img {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      object-fit: contain;
+      background: var(--primary-light);
+    }
+    .sn-logo .logo-dot {
+      color: var(--primary);
+    }
+
+    /* Nav links (desktop) */
+    .sn-nav-links {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      list-style: none;
+    }
+    .sn-nav-links a {
+      font-size: .875rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      padding: 6px 13px;
+      border-radius: 8px;
+      transition: var(--transition);
+    }
+    .sn-nav-links a:hover {
+      color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    /* Nav right actions */
+    .sn-nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sn-login-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: .875rem;
+      font-weight: 600;
+      font-family: var(--font-head);
+      color: var(--primary);
+      background: var(--primary-light);
+      border: 1.5px solid rgba(79,70,229,.2);
+      border-radius: 9px;
+      padding: 7px 18px;
+      transition: var(--transition);
+    }
+    .sn-login-btn:hover {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+      box-shadow: 0 4px 16px rgba(79,70,229,.3);
+      transform: translateY(-1px);
+    }
+
+    /* Hamburger toggle */
+    .sn-menu-toggle {
+      display: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--text);
+      width: 40px;
+      height: 40px;
+      border-radius: 9px;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition);
+      border: 1.5px solid var(--border);
+    }
+    .sn-menu-toggle:hover {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    /* =============================================
+       MOBILE MENU (SLIDE-IN RIGHT)
+    ============================================= */
+    .sn-mobile-menu {
+      position: fixed;
+      top: 0; right: -100%;
+      width: min(320px, 85vw);
+      height: 100vh;
+      background: var(--surface);
+      box-shadow: var(--shadow-lg);
+      z-index: 1100;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      transition: right .38s cubic-bezier(.4,0,.2,1);
+      overflow-y: auto;
+    }
+    .sn-mobile-menu.active { right: 0; }
+
+    .sn-mobile-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,.45);
+      z-index: 1050;
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+      animation: fadeIn .3s ease;
+    }
+    .sn-mobile-overlay.active { display: block; }
+
+    .sn-mobile-menu-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sn-mobile-menu-header .sn-logo { font-size: 1.05rem; }
+
+    .sn-menu-close {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      background: none;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      transition: var(--transition);
+    }
+    .sn-menu-close:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+    .sn-mobile-menu nav {
+      padding: 16px 16px;
+      flex: 1;
+    }
+
+    .sn-mobile-menu nav a,
+    .sn-mobile-menu nav .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 16px;
+      border-radius: 11px;
+      color: var(--text);
+      font-size: .925rem;
+      font-weight: 500;
+      transition: var(--transition);
+      margin-bottom: 4px;
+      cursor: pointer;
+    }
+    .sn-mobile-menu nav a:hover,
+    .sn-mobile-menu nav .menu-item:hover {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+    .sn-mobile-menu nav a i,
+    .sn-mobile-menu nav .menu-item i {
+      font-size: 1.1rem;
+      width: 22px;
+      text-align: center;
+      opacity: .75;
+    }
+
+    .sn-year-badge {
+      margin: 8px 16px;
+      padding: 14px 16px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border-radius: 12px;
+      color: #fff;
+      font-size: .82rem;
+      font-weight: 600;
+    }
+    .sn-year-badge .year-label { opacity: .75; font-size: .72rem; margin-bottom: 2px; letter-spacing: .5px; text-transform: uppercase; }
+    .sn-year-badge .year-val { font-size: 1rem; font-weight: 800; font-family: var(--font-head); }
+
+    .sn-mobile-social {
+      padding: 16px 16px 24px;
+      border-top: 1px solid var(--border);
+    }
+    .sn-mobile-social p { font-size: .72rem; color: var(--text-muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: .5px; padding-left: 4px; }
+    .sn-mobile-social .social-row { display: flex; gap: 8px; }
+    .sn-mobile-social .social-row a {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: var(--transition);
+    }
+    .sn-mobile-social .social-row a:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+    /* =============================================
+       ANNOUNCEMENT BANNER
+    ============================================= */
+    .sn-announcement {
+      position: fixed;
+      top: var(--nav-h);
+      left: 0; right: 0;
+      z-index: 900;
+      background: linear-gradient(90deg, var(--primary), #7c3aed, var(--accent));
+      background-size: 200% 100%;
+      animation: shimmer 4s linear infinite;
+      color: #fff;
+      font-size: .82rem;
+      font-weight: 600;
+      font-family: var(--font-head);
+      overflow: hidden;
+      height: 36px;
+      display: flex;
+      align-items: center;
+    }
+    .sn-announcement-inner {
+      display: flex;
+      white-space: nowrap;
+      animation: marquee 22s linear infinite;
+    }
+    .sn-announcement-inner span { padding: 0 60px; }
+
+    /* =============================================
+       HERO SECTION
+    ============================================= */
+    .sn-hero {
+      min-height: 100vh;
+      padding-top: calc(var(--nav-h) + 36px);
+      display: flex;
+      align-items: center;
+      background: linear-gradient(145deg, #0f172a 0%, #1e1b4b 45%, #312e81 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Decorative blobs */
+    .sn-hero::before {
+      content: '';
+      position: absolute;
+      top: -100px; right: -100px;
+      width: 500px; height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(79,70,229,.35) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .sn-hero::after {
+      content: '';
+      position: absolute;
+      bottom: -150px; left: -80px;
+      width: 420px; height: 420px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(6,182,212,.25) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* Dot grid texture */
+    .sn-hero-bg-grid {
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
+      background-size: 32px 32px;
+      pointer-events: none;
+    }
+
+    .sn-hero-inner {
+      position: relative;
+      z-index: 2;
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 60px 24px 80px;
+      text-align: center;
+    }
+
+    .sn-hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 100px;
+      padding: 6px 16px;
+      color: rgba(255,255,255,.85);
+      font-size: .78rem;
+      font-weight: 600;
+      letter-spacing: .3px;
+      margin-bottom: 28px;
+      animation: slideDown .7s ease both;
+    }
+    .sn-hero-pill i { color: var(--accent2); font-size: .85rem; }
+
+    .sn-hero h1 {
+      font-family: var(--font-head);
+      font-size: clamp(2.1rem, 6vw, 3.4rem);
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.15;
+      letter-spacing: -1.5px;
+      margin-bottom: 22px;
+      animation: fadeUp .7s .1s ease both;
+    }
+    .sn-hero h1 .highlight {
+      background: linear-gradient(90deg, #818cf8, #06b6d4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .sn-hero p {
+      font-size: 1.05rem;
+      color: rgba(255,255,255,.7);
+      max-width: 520px;
+      margin: 0 auto 36px;
+      line-height: 1.75;
+      animation: fadeUp .7s .2s ease both;
+    }
+
+    .sn-hero-ctas {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+      animation: fadeUp .7s .3s ease both;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--primary);
+      color: #fff;
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: .92rem;
+      padding: 13px 28px;
+      border-radius: 11px;
+      transition: var(--transition);
+      box-shadow: 0 4px 24px rgba(79,70,229,.45);
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-primary::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0);
+      transition: background .25s;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(79,70,229,.55);
+      background: #4338ca;
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,.1);
+      color: #fff;
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: .92rem;
+      padding: 13px 28px;
+      border-radius: 11px;
+      border: 1.5px solid rgba(255,255,255,.22);
+      transition: var(--transition);
+    }
+    .btn-secondary:hover {
+      background: rgba(255,255,255,.2);
+      transform: translateY(-2px);
+    }
+
+    /* Stats bar */
+    .sn-stats {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      margin-top: 56px;
+      animation: fadeUp .7s .45s ease both;
+    }
+    .sn-stat {
+      flex: 1;
+      max-width: 150px;
+      padding: 18px 12px;
+      text-align: center;
+      border-right: 1px solid rgba(255,255,255,.12);
+    }
+    .sn-stat:last-child { border-right: none; }
+    .sn-stat .val {
+      font-family: var(--font-head);
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #fff;
+    }
+    .sn-stat .lbl {
+      font-size: .72rem;
+      color: rgba(255,255,255,.55);
+      margin-top: 3px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+
+    /* =============================================
+       SECTION WRAPPER
+    ============================================= */
+    .sn-section {
+      padding: 90px 24px;
+    }
+    .sn-container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .sn-section-label {
+      display: inline-block;
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--primary);
+      background: var(--primary-light);
+      padding: 5px 14px;
+      border-radius: 100px;
+      margin-bottom: 14px;
+    }
+    .sn-section-title {
+      font-family: var(--font-head);
+      font-size: clamp(1.6rem, 4vw, 2.3rem);
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -.8px;
+      line-height: 1.2;
+      margin-bottom: 14px;
+    }
+    .sn-section-sub {
+      font-size: 1rem;
+      color: var(--text-muted);
+      max-width: 540px;
+      line-height: 1.7;
+    }
+    .sn-section-header {
+      margin-bottom: 52px;
+    }
+
+    /* =============================================
+       WHAT WE DO — FEATURE CARDS
+    ============================================= */
+    #about { background: var(--surface); }
+
+    .sn-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 22px;
+    }
+
+    .sn-card {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px 26px;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+    .sn-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform .35s ease;
+    }
+    .sn-card:hover {
+      border-color: rgba(79,70,229,.25);
+      box-shadow: var(--shadow-md);
+      transform: translateY(-4px);
+    }
+    .sn-card:hover::before { transform: scaleX(1); }
+
+    .sn-card-icon {
+      width: 50px; height: 50px;
+      border-radius: 13px;
+      background: var(--primary-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+      transition: var(--transition);
+    }
+    .sn-card:hover .sn-card-icon {
+      background: var(--primary);
+    }
+    .sn-card-icon i {
+      font-size: 1.35rem;
+      color: var(--primary);
+      transition: var(--transition);
+    }
+    .sn-card:hover .sn-card-icon i { color: #fff; }
+
+    .sn-card h4 {
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .sn-card p {
+      font-size: .88rem;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    /* =============================================
+       SCHOOL YEAR SECTION
+    ============================================= */
+    .sn-year-section {
+      background: linear-gradient(135deg, #0f172a, #1e1b4b);
+      padding: 60px 24px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .sn-year-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,.04) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+    .sn-year-section .inner { position: relative; z-index: 2; }
+    .sn-year-section .sn-section-label { background: rgba(255,255,255,.1); color: rgba(255,255,255,.75); }
+    .sn-year-section .sn-section-title { color: #fff; }
+    .sn-year-cards {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 36px;
+      flex-wrap: wrap;
+    }
+    .sn-year-card {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: var(--radius-lg);
+      padding: 28px 40px;
+      min-width: 200px;
+      text-align: center;
+      backdrop-filter: blur(8px);
+    }
+    .sn-year-card .yc-icon {
+      font-size: 1.8rem;
+      margin-bottom: 10px;
+      color: var(--accent);
+    }
+    .sn-year-card .yc-label {
+      font-size: .72rem;
+      color: rgba(255,255,255,.55);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      margin-bottom: 6px;
+    }
+    .sn-year-card .yc-value {
+      font-family: var(--font-head);
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    /* =============================================
+       INDEX CARD (CTA + CAROUSEL)
+    ============================================= */
+    .index-hero {
+      background: var(--surface2);
+      padding: 80px 24px;
+      display: flex;
+      justify-content: center;
+    }
+    .index-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 36px 32px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: var(--shadow-md);
+    }
+
+    .index-logo {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+    .index-logo img {
+      width: 60px;
+      height: 60px;
+      border-radius: 16px;
+      object-fit: contain;
+      background: var(--primary-light);
+    }
+
+    .index-card h2 {
+      font-family: var(--font-head);
+      font-weight: 800;
+      font-size: 1.4rem;
+      text-align: center;
+      margin-bottom: 6px;
+      letter-spacing: -.5px;
+    }
+
+    .portal-card {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 20px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      text-decoration: none;
+      color: var(--text);
+      transition: var(--transition);
+      margin-top: 4px;
+    }
+    .portal-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 4px 20px rgba(79,70,229,.15);
+      transform: translateY(-1px);
+    }
+
+    /* =============================================
+       CAROUSEL
+    ============================================= */
+    #carousel {
+      margin-top: 28px;
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius);
+    }
+    #carouselTrack {
+      display: flex;
+      transition: transform .5s ease;
+      will-change: transform;
+    }
+    .c-slide {
+      min-width: 100%;
+      padding: 28px 24px;
+      box-sizing: border-box;
+      border-radius: var(--radius);
+      color: #fff;
+      text-align: center;
+    }
+    .c-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #cbd5e1; cursor: pointer;
+      transition: background .3s, transform .3s; display: inline-block;
+    }
+    .c-dot.active { background: var(--primary); transform: scale(1.3); }
+
+    /* =============================================
+       ABOUT SECTION
+    ============================================= */
+    #about-company { background: var(--bg); }
+
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 52px;
+      align-items: center;
+    }
+    .about-visual {
+      background: linear-gradient(135deg, var(--primary), #7c3aed);
+      border-radius: var(--radius-lg);
+      aspect-ratio: 4/3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+    .about-visual::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .about-visual i { font-size: 3.5rem; position: relative; z-index: 2; }
+    .about-visual p { font-family: var(--font-head); font-weight: 700; font-size: 1.1rem; position: relative; z-index: 2; text-align: center; padding: 0 20px; opacity: .9; }
+
+    .about-points { display: flex; flex-direction: column; gap: 18px; margin-top: 28px; }
+    .about-point {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .about-point-icon {
+      width: 38px; height: 38px;
+      border-radius: 10px;
+      background: var(--primary-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .about-point-icon i { color: var(--primary); font-size: 1rem; }
+    .about-point h5 { font-family: var(--font-head); font-weight: 700; font-size: .9rem; margin-bottom: 3px; }
+    .about-point p { font-size: .84rem; color: var(--text-muted); line-height: 1.6; }
+
+    /* =============================================
+       TRUSTED MARQUEE
+    ============================================= */
+    .sn-trusted {
+      background: var(--surface);
+      padding: 44px 0;
+      overflow: hidden;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .sn-trusted-label {
+      text-align: center;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-light);
+      margin-bottom: 24px;
+    }
+    .sn-marquee-track {
+      display: flex;
+      width: max-content;
+      animation: marquee 20s linear infinite;
+      gap: 0;
+    }
+    .sn-marquee-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 36px;
+      font-size: .88rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-right: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .sn-marquee-item i { color: var(--primary); font-size: 1rem; }
+
+    /* =============================================
+       FOOTER
+    ============================================= */
+    .sn-footer {
+      background: #0f172a;
+      color: rgba(255,255,255,.7);
+      padding: 64px 24px 32px;
+    }
+    .sn-footer-grid {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 44px;
+      margin-bottom: 48px;
+    }
+    .sn-footer-brand .sn-logo { color: #fff; margin-bottom: 14px; }
+    .sn-footer-brand p { font-size: .86rem; line-height: 1.7; max-width: 260px; }
+    .sn-footer-col h6 {
+      font-family: var(--font-head);
+      font-size: .8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: rgba(255,255,255,.9);
+      margin-bottom: 16px;
+    }
+    .sn-footer-col a {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: rgba(255,255,255,.6);
+      font-size: .875rem;
+      padding: 5px 0;
+      transition: var(--transition);
+    }
+    .sn-footer-col a:hover { color: var(--accent); }
+    .sn-footer-col a i { font-size: .9rem; }
+
+    .sn-footer-bottom {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding-top: 28px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: .8rem;
+    }
+    .sn-footer-bottom a { color: rgba(255,255,255,.5); transition: var(--transition); }
+    .sn-footer-bottom a:hover { color: var(--accent); }
+
+    /* =============================================
+       RESPONSIVE
+    ============================================= */
+    @media (max-width: 900px) {
+      .sn-nav-links { display: none; }
+      .sn-menu-toggle { display: flex; }
+      .sn-footer-grid { grid-template-columns: 1fr 1fr; }
+      .about-grid { grid-template-columns: 1fr; }
+      .about-visual { aspect-ratio: 16/7; }
+    }
+    @media (max-width: 600px) {
+      .sn-nav { padding: 0 16px; }
+      .sn-hero-inner { padding: 40px 16px 60px; }
+      .sn-stats { gap: 0; }
+      .sn-stat { max-width: 110px; padding: 14px 8px; }
+      .sn-stat .val { font-size: 1.2rem; }
+      .sn-footer-grid { grid-template-columns: 1fr; gap: 28px; }
+      .sn-footer-bottom { flex-direction: column; text-align: center; }
+      .index-card { padding: 24px 18px; }
+      .btn-primary, .btn-secondary { width: 100%; justify-content: center; }
+      .sn-hero-ctas { flex-direction: column; align-items: center; }
+    }
+  </style>
 </head>
 <body>
 
-<div class="index-hero">
-  <div class="index-card">
+  <!-- =============================================
+       STICKY HEADER
+  ============================================= -->
+  <header class="sn-header" id="sn-header">
+    <div class="sn-nav">
+      <a href="#" class="sn-logo">
+        <img src="schoolNova.png" alt="SN" onerror="this.style.display='none'"/>
+        <span class="logo-dot">SchoolNova</span>
+      </a>
 
-    <!-- Logo -->
-    <div class="index-logo"><img src="schoolNova2.png" alt="SN" /></div>
-    <h2 style="text-align:center;font-size:1.5rem;margin-bottom:4px">SchoolNova</h2>
-    <p style="text-align:center;color:var(--text-muted);font-size:.88rem;margin-bottom:28px">
-      Building Records that Last Forever
-    </p>
+      <ul class="sn-nav-links">
+        <li><a href="#about">Features</a></li>
+        <li><a href="#about-company">About</a></li>
+        <li><a href="#">How to Use</a></li>
+        <li><a href="#">CBT App</a></li>
+      </ul>
 
-    <!-- Students check results via Admin Portal / Print Results section -->
-    <!-- Admin Portal -->
-    <a href="admin-login.html" class="portal-card" style="display:flex;flex-direction:row;align-items:center;gap:14px;padding:16px 20px;border:2px solid var(--border);border-radius:var(--radius);text-decoration:none;color:var(--text);transition:all .25s;margin-top:4px">
-      <div style="width:44px;height:44px;border-radius:10px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <i class="bi bi-shield-lock-fill" style="font-size:1.2rem;color:var(--primary)"></i>
+      <div class="sn-nav-actions">
+        <a href="admin-login.html" class="sn-login-btn">
+          <i class="bi bi-box-arrow-in-right"></i> Login
+        </a>
+        <i class="bi bi-list sn-menu-toggle" id="menuToggle" role="button" aria-label="Open menu"></i>
       </div>
-      <div>
-        <div style="font-weight:800;font-size:.9rem">Get Started</div>
-        <div style="font-size:.75rem;color:var(--text-muted)">Recommended For School Owners, Principals, Teachers and Administrators only</div>
+    </div>
+  </header>
+
+  <!-- =============================================
+       MOBILE OVERLAY & MENU
+  ============================================= -->
+  <div class="sn-mobile-overlay" id="mobileOverlay" onclick="closeMenu()"></div>
+
+  <div class="sn-mobile-menu" id="mobileMenu" role="dialog" aria-label="Navigation menu">
+    <div class="sn-mobile-menu-header">
+      <div class="sn-logo" style="font-size:1rem">
+        <img src="schoolNova.png" alt="SN" style="width:30px;height:30px;border-radius:8px" onerror="this.style.display='none'"/>
+          <span class="logo-dot">SchoolNova</span>
       </div>
-      <i class="bi bi-chevron-right" style="margin-left:auto;color:var(--text-muted)"></i>
-    </a>
-
-    <!-- Carousel -->
-    <div style="margin-top:28px;position:relative;overflow:hidden;border-radius:14px" id="carousel">
-
-      <!-- Slides -->
-      <div id="carouselTrack" style="display:flex;transition:transform .50s ease;will-change:transform">
-
-        <!-- Slide 1 — What is SchoolNova -->
-        <div class="c-slide" style="min-width:100%;background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 24px;box-sizing:border-box;border-radius:14px;color:#fff;text-align:center">
-          <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
-            <i class="bi bi-stars" style="font-size:1.6rem"></i>
-          </div>
-          <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">What is SchoolNova?</div>
-          <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px">Complete School Management System</div>
-          <div style="font-size:.82rem;opacity:.9;line-height:1.6">A cloud-based platform that manages student results, attendance, broadsheets and academic records — all in one place, accessible from any device.</div>
-        </div>
-
-        <!-- Slide 2 — Problem it solves -->
-        <div class="c-slide" style="min-width:100%;background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:28px 24px;box-sizing:border-box;border-radius:14px;color:#fff;text-align:center">
-          <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
-            <i class="bi bi-exclamation-triangle-fill" style="font-size:1.6rem;color:#fbbf24"></i>
-          </div>
-          <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">The Problem We Solve</div>
-          <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px">No More Manual Result Computing</div>
-          <div style="font-size:.82rem;opacity:.9;line-height:1.6">Schools spend weeks computing results by hand every term. SchoolNova eliminates all manual work — positions, grades and broadsheets are generated instantly and accurately.</div>
-        </div>
-
-        <!-- Slide 3 — Attendance -->
-        <div class="c-slide" style="min-width:100%;background:linear-gradient(135deg,#065f46,#059669);padding:28px 24px;box-sizing:border-box;border-radius:14px;color:#fff;text-align:center">
-          <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
-            <i class="bi bi-calendar-check-fill" style="font-size:1.6rem"></i>
-          </div>
-          <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">Smart Attendance</div>
-          <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px">Morning + Afternoon Tracking</div>
-          <div style="font-size:.82rem;opacity:.9;line-height:1.6">Track AM and PM sessions daily. Automatic holiday exclusion, weekly analytics, per-student summaries and percentage calculations — all done for you.</div>
-        </div>
-
-        <!-- Slide 4 — Role Based Access -->
-        <div class="c-slide" style="min-width:100%;background:linear-gradient(135deg,#7c2d12,#ea580c);padding:28px 24px;box-sizing:border-box;border-radius:14px;color:#fff;text-align:center">
-          <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
-            <i class="bi bi-people-fill" style="font-size:1.6rem"></i>
-          </div>
-          <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">Role Based Access</div>
-          <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px">Admin, Form Teacher, Subject Teacher</div>
-          <div style="font-size:.82rem;opacity:.9;line-height:1.6">Every user sees only what is relevant to their role. Admins see everything. Form teachers manage their class. Subject teachers manage their subjects only.</div>
-        </div>
-
-        <!-- Slide 5 — Record Bank -->
-        <div class="c-slide" style="min-width:100%;background:linear-gradient(135deg,#1e1b4b,#4338ca);padding:28px 24px;box-sizing:border-box;border-radius:14px;color:#fff;text-align:center">
-          <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
-            <i class="bi bi-archive-fill" style="font-size:1.6rem"></i>
-          </div>
-          <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">Record Bank</div>
-          <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px">Building Records That Last Forever</div>
-          <div style="font-size:.82rem;opacity:.9;line-height:1.6">Every academic session is stored permanently. Go back years to retrieve attendance, scores and broadsheets from any past term — anytime, instantly.</div>
-        </div>
-
-        <!-- Slide 6 — Parent Access -->
-        <div class="c-slide" style="min-width:100%;background:linear-gradient(135deg,#164e63,#0891b2);padding:28px 24px;box-sizing:border-box;border-radius:14px;color:#fff;text-align:center">
-          <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
-            <i class="bi bi-phone-fill" style="font-size:1.6rem"></i>
-          </div>
-          <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">Parent Access</div>
-          <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px">Results Online — No School Visit Needed</div>
-          <div style="font-size:.82rem;opacity:.9;line-height:1.6">Parents check their child's result card, grades, positions, teacher remarks and full attendance record online from any phone — the moment Admin releases it.</div>
-        </div>
-
-      </div>
-
-      <!-- Dots -->
-      <div style="display:flex;justify-content:center;gap:7px;padding:14px 0 4px" id="carouselDots">
-        <span class="c-dot active" onclick="goSlide(0)"></span>
-        <span class="c-dot" onclick="goSlide(1)"></span>
-        <span class="c-dot" onclick="goSlide(2)"></span>
-        <span class="c-dot" onclick="goSlide(3)"></span>
-        <span class="c-dot" onclick="goSlide(4)"></span>
-        <span class="c-dot" onclick="goSlide(5)"></span>
-      </div>
-
-      <!-- Prev / Next -->
-      <button onclick="prevSlide()" style="position:absolute;top:50%;left:8px;transform:translateY(-60%);background:rgba(255,255,255,.25);border:none;border-radius:50%;width:32px;height:32px;color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">&#8249;</button>
-      <button onclick="nextSlide()" style="position:absolute;top:50%;right:8px;transform:translateY(-60%);background:rgba(255,255,255,.25);border:none;border-radius:50%;width:32px;height:32px;color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">&#8250;</button>
+      <button class="sn-menu-close" onclick="closeMenu()" aria-label="Close menu">
+        <i class="bi bi-x-lg"></i>
+      </button>
     </div>
 
-    <p style="text-align:center;font-size:.72rem;color:var(--text-muted);margin-top:20px">
-      &copy; 2024 SchoolNova by Brightest Digital Services. All rights reserved.
-    </p>
+    <nav>
+      <a href="admin-login.html" onclick="closeMenu()">
+        <i class="bi bi-box-arrow-in-right"></i> Get Started
+      </a>
+      <a href="#about" onclick="closeMenu()">
+        <i class="bi bi-grid-1x2"></i> Features
+      </a>
+      <a href="#about-company" onclick="closeMenu()">
+        <i class="bi bi-info-circle"></i> About
+      </a>
+      <a href="#" onclick="closeMenu()">
+        <i class="bi bi-book-half"></i> How to Use
+      </a>
+      <a href="https://schoolnova-cbt.web.app/" onclick="closeMenu()">
+        <i class="bi bi-laptop"></i> Free CBT App
+      </a>
+    </nav>
 
+    <div class="sn-mobile-social">
+      <p>Support &amp; Community</p>
+      <div class="social-row">
+        <a href="https://wa.me/+2348107069369"><i class="bi bi-whatsapp"></i> WhatsApp</a>
+        <a href="#"><i class="bi bi-facebook"></i> Facebook</a>
+        <a href="#"><i class="bi bi-twitter-x"></i> Twitter</a>
+      </div>
+    </div>
   </div>
-</div>
 
+  <!-- =============================================
+       ANNOUNCEMENT BANNER
+  ============================================= -->
+  <div class="sn-announcement" id="sn-announcement">
+    <div class="sn-announcement-inner" id="announcementInner">
+      <!-- JS fills content -->
+    </div>
+  </div>
 
+  <!-- =============================================
+       HERO
+  ============================================= -->
+  <section class="sn-hero">
+    <div class="sn-hero-bg-grid"></div>
+    <div class="sn-hero-inner">
+      <div class="sn-hero-pill">
+        <i class="bi bi-stars"></i> Premium School Management Platform
+      </div>
+      <h1>The Smarter Way to<br/><span class="highlight">Run Your School</span></h1>
+      <p>SchoolNova is a cloud-based system that handles student results, attendance, broadsheets and records — instantly, accurately, and from any device.</p>
+      <div class="sn-hero-ctas">
+        <a href="admin-login.html" class="btn-primary">
+          <i class="bi bi-shield-lock-fill"></i> Get Started
+        </a>
+        <a href="#about" class="btn-secondary">
+          <i class="bi bi-play-circle"></i> See How It Works
+        </a>
+      </div>
+      <div class="sn-stats">
+        <div class="sn-stat"><div class="val">500+</div><div class="lbl">Schools</div></div>
+        <div class="sn-stat"><div class="val">1M+</div><div class="lbl">Records</div></div>
+        <div class="sn-stat"><div class="val">99.9%</div><div class="lbl">Uptime</div></div>
+        <div class="sn-stat"><div class="val">∞</div><div class="lbl">Storage</div></div>
+      </div>
+    </div>
+  </section>
 
-<style>
-.c-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #cbd5e1; cursor: pointer;
-  transition: background .3s, transform .3s; display: inline-block;
-}
-.c-dot.active { background: #4f46e5; transform: scale(1.3); }
-</style>
+  <!-- =============================================
+       TRUSTED MARQUEE
+  ============================================= -->
+  <div class="sn-trusted">
+    <div class="sn-trusted-label">Trusted by schools across Nigeria</div>
+    <div style="overflow:hidden">
+      <div class="sn-marquee-track" id="marqueeTrack">
+        <!-- filled by JS -->
+      </div>
+    </div>
+  </div>
 
-<script>
-var currentSlide = 0;
-var totalSlides  = 6;
-var autoTimer;
+  <!-- =============================================
+       WHAT WE DO — FEATURES
+  ============================================= -->
+  <section class="sn-section" id="about">
+    <div class="sn-container">
+      <div class="sn-section-header fade-up">
+        <div class="sn-section-label">What We Do</div>
+        <h2 class="sn-section-title">Everything your school needs<br/>in one platform</h2>
+        <p class="sn-section-sub">From student records to result sheets — SchoolNova automates the repetitive work so your staff can focus on teaching.</p>
+      </div>
 
-function goSlide(n) {
-  currentSlide = n;
-  document.getElementById("carouselTrack").style.transform = "translateX(-" + (n * 100) + "%)";
-  document.querySelectorAll(".c-dot").forEach(function(d, i) {
-    d.classList.toggle("active", i === n);
-  });
-}
-function nextSlide() { goSlide((currentSlide + 1) % totalSlides); resetTimer(); }
-function prevSlide() { goSlide((currentSlide - 1 + totalSlides) % totalSlides); resetTimer(); }
-function resetTimer() { clearInterval(autoTimer); autoTimer = setInterval(nextSlide, 4000); }
+      <div class="sn-grid">
+        <div class="sn-card fade-up">
+          <div class="sn-card-icon"><i class="bi bi-people-fill"></i></div>
+          <h4>Student Management</h4>
+          <p>Manage all student data, records and academic history in one place. Searchable, sortable, always up to date.</p>
+        </div>
+        <div class="sn-card fade-up" style="transition-delay:.07s">
+          <div class="sn-card-icon"><i class="bi bi-laptop"></i></div>
+          <h4>CBT System</h4>
+          <p>Conduct exams online with instant grading and result processing. No more manual marking.</p>
+        </div>
+        <div class="sn-card fade-up" style="transition-delay:.14s">
+          <div class="sn-card-icon"><i class="bi bi-graph-up-arrow"></i></div>
+          <h4>Performance Tracking</h4>
+          <p>Analyze student performance across subjects and terms with auto-generated broadsheets and class positions.</p>
+        </div>
+        <div class="sn-card fade-up" style="transition-delay:.21s">
+          <div class="sn-card-icon"><i class="bi bi-calendar-check-fill"></i></div>
+          <h4>Smart Attendance</h4>
+          <p>Track AM and PM sessions daily. Automatic holiday exclusion with weekly analytics and summaries.</p>
+        </div>
+        <div class="sn-card fade-up" style="transition-delay:.28s">
+          <div class="sn-card-icon"><i class="bi bi-shield-lock-fill"></i></div>
+          <h4>Role-Based Access</h4>
+          <p>Admins see everything. Form teachers manage their class. Subject teachers manage their subjects only.</p>
+        </div>
+        <div class="sn-card fade-up" style="transition-delay:.35s">
+          <div class="sn-card-icon"><i class="bi bi-archive-fill" style="font-size:1.6rem"></i></div>
+          <h4>Record Bank</h4>
+          <p>Every academic session is stored permanently. Go back years to retrieve attendance, scores and broadsheets from any past term — anytime, instantly.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
-// Auto-play
-autoTimer = setInterval(nextSlide, 4000);
+  <!-- =============================================
+       GET STARTED CARD + CAROUSEL
+  ============================================= -->
+  <div class="index-hero">
+    <div class="index-card fade-up">
+      <div class="index-logo">
+        <img src="schoolNova.png" alt="SN" onerror="this.style.display='none'"/>
+      </div>
+      <h2 style="text-align:center;font-size:1.4rem;margin-bottom:4px;font-family:'Sora',sans-serif;font-weight:800;letter-spacing:-.5px">SchoolNova</h2>
+      <p style="text-align:center;color:var(--text-muted);font-size:.88rem;margin-bottom:28px">Building Records that Last Forever</p>
 
-// Touch swipe support
-var touchStartX = 0;
-document.getElementById("carousel").addEventListener("touchstart", function(e) {
-  touchStartX = e.touches[0].clientX;
-});
-document.getElementById("carousel").addEventListener("touchend", function(e) {
-  var diff = touchStartX - e.changedTouches[0].clientX;
-  if (diff > 40) nextSlide();
-  else if (diff < -40) prevSlide();
-});
-</script>
+      <a href="admin-login.html" class="portal-card">
+        <div style="width:44px;height:44px;border-radius:10px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="bi bi-shield-lock-fill" style="font-size:1.2rem;color:var(--primary)"></i>
+        </div>
+        <div>
+          <div style="font-weight:800;font-size:.9rem;font-family:'Sora',sans-serif">Get Started</div>
+          <div style="font-size:.75rem;color:var(--text-muted)">Recommended For School Owners, Principals, Teachers and Administrators only</div>
+        </div>
+        <i class="bi bi-chevron-right" style="margin-left:auto;color:var(--text-muted)"></i>
+      </a>
+
+      <!-- Carousel -->
+      <div style="margin-top:28px;position:relative;overflow:hidden;border-radius:14px" id="carousel">
+        <div id="carouselTrack" style="display:flex;transition:transform .5s ease;will-change:transform">
+
+          <div class="c-slide" style="background:linear-gradient(135deg,#4f46e5,#7c3aed)">
+            <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+              <i class="bi bi-stars" style="font-size:1.6rem"></i>
+            </div>
+            <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">What is SchoolNova?</div>
+            <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px;font-family:'Sora',sans-serif">Complete School Management System</div>
+            <div style="font-size:.82rem;opacity:.9;line-height:1.6">A cloud-based platform that manages student results, attendance, broadsheets and academic records — all in one place, accessible from any device.</div>
+          </div>
+
+          <div class="c-slide" style="background:linear-gradient(135deg,#0f172a,#1e3a8a)">
+            <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+              <i class="bi bi-exclamation-triangle-fill" style="font-size:1.6rem;color:#fbbf24"></i>
+            </div>
+            <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">The Problem We Solve</div>
+            <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px;font-family:'Sora',sans-serif">No More Manual Result Computing</div>
+            <div style="font-size:.82rem;opacity:.9;line-height:1.6">Schools spend weeks computing results by hand every term. SchoolNova eliminates all manual work — positions, grades and broadsheets are generated instantly and accurately.</div>
+          </div>
+
+          <div class="c-slide" style="background:linear-gradient(135deg,#065f46,#059669)">
+            <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+              <i class="bi bi-calendar-check-fill" style="font-size:1.6rem"></i>
+            </div>
+            <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">Smart Attendance</div>
+            <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px;font-family:'Sora',sans-serif">Morning + Afternoon Tracking</div>
+            <div style="font-size:.82rem;opacity:.9;line-height:1.6">Track AM and PM sessions daily. Automatic holiday exclusion, weekly analytics, per-student summaries and percentage calculations — all done for you.</div>
+          </div>
+
+          <div class="c-slide" style="background:linear-gradient(135deg,#7c2d12,#ea580c)">
+            <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+              <i class="bi bi-people-fill" style="font-size:1.6rem"></i>
+            </div>
+            <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">Role Based Access</div>
+            <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px;font-family:'Sora',sans-serif">Admin, Form Teacher, Subject Teacher</div>
+            <div style="font-size:.82rem;opacity:.9;line-height:1.6">Every user sees only what is relevant to their role. Admins see everything. Form teachers manage their class. Subject teachers manage their subjects only.</div>
+          </div>
+
+          <div class="c-slide" style="background:linear-gradient(135deg,#1e1b4b,#4338ca)">
+            <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+              <i class="bi bi-archive-fill" style="font-size:1.6rem"></i>
+            </div>
+            <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">Record Bank</div>
+            <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px;font-family:'Sora',sans-serif">Building Records That Last Forever</div>
+            <div style="font-size:.82rem;opacity:.9;line-height:1.6">Every academic session is stored permanently. Go back years to retrieve attendance, scores and broadsheets from any past term — anytime, instantly.</div>
+          </div>
+
+          <div class="c-slide" style="background:linear-gradient(135deg,#164e63,#0891b2)">
+            <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+              <i class="bi bi-phone-fill" style="font-size:1.6rem"></i>
+            </div>
+            <div style="font-size:.68rem;font-weight:800;letter-spacing:1.5px;opacity:.8;margin-bottom:6px;text-transform:uppercase">Parent Access</div>
+            <div style="font-size:1.05rem;font-weight:900;margin-bottom:10px;font-family:'Sora',sans-serif">Results Online — No School Visit Needed</div>
+            <div style="font-size:.82rem;opacity:.9;line-height:1.6">Parents check their child's result card, grades, positions, teacher remarks and full attendance record online from any phone — the moment Admin releases it.</div>
+          </div>
+
+        </div>
+
+        <!-- Dots -->
+        <div style="display:flex;justify-content:center;gap:7px;padding:14px 0 4px" id="carouselDots">
+          <span class="c-dot active" onclick="goSlide(0)"></span>
+          <span class="c-dot" onclick="goSlide(1)"></span>
+          <span class="c-dot" onclick="goSlide(2)"></span>
+          <span class="c-dot" onclick="goSlide(3)"></span>
+          <span class="c-dot" onclick="goSlide(4)"></span>
+          <span class="c-dot" onclick="goSlide(5)"></span>
+        </div>
+
+        <!-- Prev / Next -->
+        <button onclick="prevSlide()" style="position:absolute;top:50%;left:8px;transform:translateY(-60%);background:rgba(255,255,255,.25);border:none;border-radius:50%;width:32px;height:32px;color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">&#8249;</button>
+        <button onclick="nextSlide()" style="position:absolute;top:50%;right:8px;transform:translateY(-60%);background:rgba(255,255,255,.25);border:none;border-radius:50%;width:32px;height:32px;color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">&#8250;</button>
+      </div>
+
+      <p style="text-align:center;font-size:.72rem;color:var(--text-muted);margin-top:20px">
+        &copy; 2025 SchoolNova by Brightest Digital Services. All rights reserved.
+      </p>
+    </div>
+  </div>
+
+  <!-- =============================================
+       ABOUT SECTION
+  ============================================= -->
+  <section class="sn-section" id="about-company">
+    <div class="sn-container">
+      <div class="about-grid">
+        <div class="about-visual fade-up">
+          <i class="bi bi-mortarboard-fill"></i>
+          <p>Empowering Schools with Technology That Works</p>
+        </div>
+        <div class="fade-up" style="transition-delay:.1s">
+          <div class="sn-section-label">About SchoolNova</div>
+          <h2 class="sn-section-title">Built for Nigerian Schools. Designed for Everyone.</h2>
+          <p class="sn-section-sub">SchoolNova was created to solve the real challenges schools face every term — from manual result computation to lost records. We build tools that just work.</p>
+          <div class="about-points">
+            <div class="about-point">
+              <div class="about-point-icon"><i class="bi bi-lightning-charge-fill"></i></div>
+              <div>
+                <h5>Fast &amp; Reliable</h5>
+                <p>Results and broadsheets are generated in seconds, not weeks. Cloud-hosted with 99.9% uptime.</p>
+              </div>
+            </div>
+            <div class="about-point">
+              <div class="about-point-icon"><i class="bi bi-lock-fill"></i></div>
+              <div>
+                <h5>Secure by Design</h5>
+                <p>Role-based access ensures every user sees only what they should. Your data is always protected.</p>
+              </div>
+            </div>
+            <div class="about-point">
+              <div class="about-point-icon"><i class="bi bi-heart-fill"></i></div>
+              <div>
+                <h5>Loved by Schools</h5>
+                <p>Hundreds of schools across Nigeria trust SchoolNova to manage their academic operations every term.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============================================
+       FOOTER
+  ============================================= -->
+  <footer class="sn-footer">
+    <div class="sn-footer-grid">
+      <div class="sn-footer-brand">
+        <div class="sn-logo" style="color:#fff;margin-bottom:14px">
+          <img src="schoolNova.png" alt="SN" style="width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.1)" onerror="this.style.display='none'"/>
+          SchoolNova
+        </div>
+        <p>A premium school management system that builds records, manages results and empowers educators across Nigeria.</p>
+      </div>
+
+      <div class="sn-footer-col">
+        <h6>Quick Links</h6>
+        <a href="admin-login.html"><i class="bi bi-box-arrow-in-right"></i> Login</a>
+        <a href="#about"><i class="bi bi-grid-1x2"></i> Features</a>
+        <a href="#about-company"><i class="bi bi-info-circle"></i> About</a>
+        <a href="https://schoolnova-cbt.web.app/"><i class="bi bi-laptop"></i> CBT App</a>
+      </div>
+
+      <div class="sn-footer-col">
+        <h6>Resources</h6>
+        <a href="#"><i class="bi bi-book-half"></i> How to Use</a>
+        <a href="infinitetechnology04@gmail.com"><i class="bi bi-question-circle"></i> FAQ</a>
+        <a href="https://infinitetechnologyapp.github.io/Portfolio"><i class="bi bi-file-earmark-text"></i> Privacy Policy</a>
+      </div>
+
+      <div class="sn-footer-col">
+        <h6>Connect</h6>
+        <a href="https://wa.me/+2348107069369"><i class="bi bi-whatsapp"></i> WhatsApp</a>
+        <a href="#"><i class="bi bi-facebook"></i> Facebook</a>
+        <a href="#"><i class="bi bi-twitter-x"></i> Twitter / X</a>
+        <a href="infinitetechnology04@gmail.com"><i class="bi bi-envelope-fill"></i> Email Support</a>
+      </div>
+    </div>
+
+    <div class="sn-footer-bottom">
+      <span>&copy; 2024 SchoolNova — Brightest Digital Services. All rights reserved.</span>
+      <div style="display:flex;gap:18px">
+        <a href="https://infinitetechnologyapp.github.io/Portfolio">Privacy</a>
+        <a href="infinitetechnology04@gmail.com">Terms</a>
+        <a href="https://wa.me/+2348107069369">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- =============================================
+       JAVASCRIPT (ALL INLINE)
+  ============================================= -->
+  <script>
+    /* ---- Dynamic Data ---- */
+    const schoolData = {
+      year: "2025/2026",
+      term: "Second Term"
+    };
+
+    const announcement = "🚀 New: CBT system now available for all schools! &nbsp;&nbsp;|&nbsp;&nbsp; 📢School managemment software for your school  &nbsp;&nbsp;|&nbsp;&nbsp; 🎓 SchoolNova — Building Records that Last Forever";
+
+    /* ---- Announcement Banner ---- */
+    (function() {
+      var inner = document.getElementById("announcementInner");
+      // duplicate text for seamless loop
+      inner.innerHTML = '<span>' + announcement + '</span><span>' + announcement + '</span>';
+    })();
+
+    /* ---- School Year Display ---- */
+    (function() {
+      var yearEl  = document.getElementById("displayYear");
+      var termEl  = document.getElementById("displayTerm");
+      var mobileEl = document.getElementById("mobileSchoolYear");
+      if (yearEl)  yearEl.textContent  = schoolData.year;
+      if (termEl)  termEl.textContent  = schoolData.term;
+      if (mobileEl) mobileEl.innerHTML = '<strong>' + schoolData.year + '</strong> &mdash; ' + schoolData.term;
+    })();
+
+    /* ---- Trusted Marquee Items ---- */
+    (function() {
+      var items = [
+        { icon: "bi-mortarboard-fill", text: "Academic Results" },
+        { icon: "bi-calendar-check-fill", text: "Smart Attendance" },
+        { icon: "bi-people-fill", text: "Student Management" },
+        { icon: "bi-archive-fill", text: "Record Bank" },
+        { icon: "bi-laptop", text: "CBT Exams" },
+        { icon: "bi-graph-up-arrow", text: "Broadsheets" },
+        { icon: "bi-phone-fill", text: "Parent Portal" },
+        { icon: "bi-shield-lock-fill", text: "Role-Based Access" },
+      ];
+      var html = '';
+      // duplicate for seamless loop
+      [items, items].forEach(function(arr) {
+        arr.forEach(function(item) {
+          html += '<div class="sn-marquee-item"><i class="bi ' + item.icon + '"></i>' + item.text + '</div>';
+        });
+      });
+      document.getElementById("marqueeTrack").innerHTML = html;
+    })();
+
+    /* ---- Sticky Header Scroll Effect ---- */
+    (function() {
+      var header = document.getElementById("sn-header");
+      var lastY  = 0;
+      window.addEventListener("scroll", function() {
+        var y = window.scrollY;
+        if (y > 30) {
+          header.classList.add("scrolled");
+        } else {
+          header.classList.remove("scrolled");
+        }
+        lastY = y;
+      }, { passive: true });
+    })();
+
+    /* ---- Mobile Menu ---- */
+    function openMenu() {
+      document.getElementById("mobileMenu").classList.add("active");
+      document.getElementById("mobileOverlay").classList.add("active");
+      document.body.style.overflow = "hidden";
+    }
+    function closeMenu() {
+      document.getElementById("mobileMenu").classList.remove("active");
+      document.getElementById("mobileOverlay").classList.remove("active");
+      document.body.style.overflow = "";
+    }
+    document.getElementById("menuToggle").addEventListener("click", openMenu);
+
+    /* ---- Carousel ---- */
+    var currentSlide = 0;
+    var totalSlides  = 6;
+    var autoTimer;
+
+    function goSlide(n) {
+      currentSlide = n;
+      document.getElementById("carouselTrack").style.transform = "translateX(-" + (n * 100) + "%)";
+      document.querySelectorAll(".c-dot").forEach(function(d, i) {
+        d.classList.toggle("active", i === n);
+      });
+    }
+    function nextSlide() { goSlide((currentSlide + 1) % totalSlides); resetTimer(); }
+    function prevSlide() { goSlide((currentSlide - 1 + totalSlides) % totalSlides); resetTimer(); }
+    function resetTimer() { clearInterval(autoTimer); autoTimer = setInterval(nextSlide, 4000); }
+
+    autoTimer = setInterval(nextSlide, 4000);
+
+    // Touch swipe
+    var touchStartX = 0;
+    document.getElementById("carousel").addEventListener("touchstart", function(e) {
+      touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+    document.getElementById("carousel").addEventListener("touchend", function(e) {
+      var diff = touchStartX - e.changedTouches[0].clientX;
+      if (diff > 40) nextSlide();
+      else if (diff < -40) prevSlide();
+    });
+
+    /* ---- Scroll Fade-Up Observer ---- */
+    (function() {
+      if (!window.IntersectionObserver) return;
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12 });
+
+      document.querySelectorAll(".fade-up").forEach(function(el) {
+        observer.observe(el);
+      });
+    })();
+  </script>
+
 </body>
 </html>
