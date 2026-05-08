@@ -33,6 +33,9 @@ import {
 const MASTER_ADMINS = [
   "infinitetechnology04@gmail.com".toLowerCase(),
   "macpeppleibim@gmail.com".toLowerCase(),
+  "patncha1984@gmail.com".toLowerCase(),
+  "apostlesundaybaridole1986@gmail.com".toLowerCase(),
+  "akpan075@gmail.com".toLowerCase(),
 ];
 
 let FORM_TEACHERS    = {};
@@ -537,7 +540,7 @@ async function loadTeachers() {
 
 // School identity state
 let _schoolName  = "Recomella Academy";
-let _schoolLogo    = "./logo.png";
+let _schoolLogo  = "./logo.png";
 let _currentSession = "";  // always holds the active session
 // Grading system — loaded from Firebase settings, used across broadsheet and score entry
 let _grading = { A:"86-100", B1:"71-85", B2:"61-70", C:"50-60", D:"39-49", F:"0-38" };
@@ -1361,19 +1364,43 @@ $("loadBroadsheetBtn").addEventListener("click", async () => {
 
   const btn = $("loadBroadsheetBtn"); btn.disabled = true; btn.textContent = "Building…";
   try {
-    const [students, allScoresRaw, subjects] = await Promise.all([
+    const [students, allScoresRaw, subjectsFromList] = await Promise.all([
       getStudentsByClassArm(classArm),
       getScoresByClassArmTerm(classArm, term),
       getClassSubjects(classBase, term, _currentSession)
     ]);
     const allScores = allScoresRaw.filter(sc => !sc.session || sc.session === _currentSession);
     if (!students.length) { toast("No students found in this class arm.", "warning"); return; }
-    if (!subjects.length) { toast("No subjects set up for this class/term yet.", "warning"); return; }
+
+    // Only show students who have at least one score recorded for this term/session
+    // This prevents newly added students (who didn't participate this term) from
+    // appearing in the broadsheet with all blank/N/A entries
+    const studentsWithScores = new Set(allScores.map(sc => sc.regNumber));
+    const activeStudents = students.filter(s => studentsWithScores.has(s.regNumber));
+    if (!activeStudents.length) { toast("No scores recorded for any student in this class/term yet.", "warning"); return; }
+
+    // Build subject columns from TWO sources merged:
+    // 1. The class subjects list for this term (current config) — preserves saved order
+    // 2. Any subject found directly in score data for this term
+    // This ensures subjects removed in a later term still appear correctly
+    // in previous term broadsheets where scores already exist for them
+    // NOTE: No .sort() — Set insertion order preserves the original saved priority
+    const subjectSet = new Set(subjectsFromList);
+    allScores.forEach(sc => {
+      // Only add subject if score belongs to this term — prevents new term
+      // subjects bleeding into old term broadsheet columns
+      if (sc.subject && String(sc.term) === String(term)) {
+        subjectSet.add(sc.subject);
+      }
+    });
+    const subjects = Array.from(subjectSet); // insertion order = saved priority order
+
+    if (!subjects.length) { toast("No subjects or scores found for this class/term.", "warning"); return; }
 
     // Cache broadsheet data — Excel download reuses this, zero extra reads
-    _bsCache = { classArm, term, students, allScores, subjects };
+    _bsCache = { classArm, term, students: activeStudents, allScores, subjects };
 
-    renderBroadsheet(classArm, term, students, allScores, subjects);
+    renderBroadsheet(classArm, term, activeStudents, allScores, subjects);
     $("broadsheetCard").style.display  = "block";
     $("downloadExcelBtn").style.display = "inline-flex";
   } catch(e) { toast(e.message, "error"); console.error(e); }
@@ -1389,9 +1416,34 @@ function renderBroadsheet(classArm, term, students, allScores, subjects) {
   });
 
   // Enrich students with offered subjects + grand total
+  // GROUND TRUTH: a student offers a subject in the broadsheet only if they
+  // have ACTUAL SCORES for it. This prevents empty score slots appearing for
+  // subjects in the class list that the student never sat (e.g. Geography
+  // showing empty when student only offered Data Processing last term).
   const rows = students.map(s => {
-    const offAll  = !s.subjectsOffered || s.subjectsOffered === "all";
-    const offered = subjects.filter(sub => offAll || (Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(sub)));
+    const offAll = !s.subjectsOffered || s.subjectsOffered === "all";
+
+    // Subjects this student has actual scores for — most reliable indicator
+    const scoredSubjects = Object.keys(scoreMap[s.regNumber] || {}).filter(sub => {
+      const sc = scoreMap[s.regNumber][sub];
+      return !sc.term || String(sc.term) === String(term);
+    });
+
+    let offeredSet;
+    if (offAll) {
+      // "All subjects" student — only show subjects they actually have scores for
+      // Prevents empty columns for subjects they never sat this term
+      offeredSet = new Set(scoredSubjects);
+    } else {
+      // Specific subjects student — show subjects from their enrollment list
+      const offeredFromList = subjects.filter(sub =>
+        Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(sub)
+      );
+      // Also include any scored subject not in their saved list (e.g. legacy data)
+      offeredSet = new Set([...offeredFromList, ...scoredSubjects]);
+    }
+
+    const offered = Array.from(offeredSet);
     let grand = 0;
     offered.forEach(sub => {
       const sc = scoreMap[s.regNumber]?.[sub];
@@ -1638,7 +1690,7 @@ $("downloadExcelBtn").addEventListener("click", async function() {
     // FOOTER
     wsData.push([""]);
     wsData.push(["Signature: ___________________________"]);
-    wsData.push(["Generated by SchoolNova System"]);
+    wsData.push(["Generated by SchoolNova system"]);
     wsData.push(["Date Generated: " + new Date().toLocaleDateString("en-GB", {day:"2-digit",month:"long",year:"numeric"})]);
 
     // BUILD WORKBOOK
@@ -2805,7 +2857,7 @@ $("exportPerStudentBtn")?.addEventListener("click", function() {
 
   wsData.push([""]);
   wsData.push(["Generated: " + new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})]);
-  wsData.push(["Generated by SchoolNova System"]);
+  wsData.push(["Generated by SchoolNova system"]);
 
   var wb  = XLSX.utils.book_new();
   var ws  = XLSX.utils.aoa_to_sheet(wsData);
@@ -3320,8 +3372,21 @@ $("loadRecordBankBtn")?.addEventListener("click", async () => {
       });
 
     const bsRows = students.map(s => {
-      const offAll  = !s.subjectsOffered || s.subjectsOffered === "all";
-      const offered = subjects.filter(sub => offAll || (Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(sub)));
+      const offAll = !s.subjectsOffered || s.subjectsOffered === "all";
+      const scoredSubjects = Object.keys(scoreMap[s.regNumber] || {}).filter(sub => {
+        const sc = scoreMap[s.regNumber][sub];
+        return !sc.term || String(sc.term) === String(_bsCache.term);
+      });
+      let offeredSet;
+      if (offAll) {
+        offeredSet = new Set(scoredSubjects);
+      } else {
+        const offeredFromList = subjects.filter(sub =>
+          Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(sub)
+        );
+        offeredSet = new Set([...offeredFromList, ...scoredSubjects]);
+      }
+      const offered = Array.from(offeredSet);
       let grand = 0;
       offered.forEach(sub => { const sc = scoreMap[s.regNumber]?.[sub]; if(sc) grand += (sc.test1||0)+(sc.test2||0)+(sc.exam||0); });
       return { ...s, offered, grand };
@@ -3392,7 +3457,7 @@ $("exportRbStudentBtn")?.addEventListener("click", function() {
 
   wsData.push([""]);
   wsData.push(["Generated: " + new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})]);
-  wsData.push(["Generated by SchoolNova System"]);
+  wsData.push(["Generated by SchoolNova system"]);
 
   var wb = XLSX.utils.book_new();
   var ws = XLSX.utils.aoa_to_sheet(wsData);
