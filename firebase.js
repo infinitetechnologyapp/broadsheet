@@ -338,11 +338,11 @@ export async function getSubjectsBySection(section, term, session) {
     "JS":      ["JS 1","JS 2","JS 3"],
     "BASIC":   ["Basic 1","Basic 2","Basic 3","Basic 4","Basic 5"],
     "NURSERY": ["Nursery 1","Nursery 2","Nursery 3"],
-    "CRECHE":  ["Creche"]
+    "PRE NURSERY":  ["Pre Nursery"]
   };
   var allClasses = ["SS 1","SS 2","SS 3","JS 1","JS 2","JS 3",
     "Basic 1","Basic 2","Basic 3","Basic 4","Basic 5",
-    "Nursery 1","Nursery 2","Nursery 3","Creche"];
+    "Nursery 1","Nursery 2","Nursery 3","Pre "];
   var classes = sectionMap[section] || allClasses;
 
   var subjectSet = new Set();
@@ -519,7 +519,7 @@ export async function saveSession(session, term, schoolName, schoolLogo, termSta
     if (extra.schoolType      !== undefined) data.schoolType      = extra.schoolType;
     if (extra.nextTermBegins  !== undefined) data.nextTermBegins  = extra.nextTermBegins;
     // Next term fees per section
-    if (extra.feesCreche      !== undefined) data.feesCreche      = extra.feesCreche;
+    if (extra.feesPreNurseey      !== undefined) data.feesPreNursery      = extra.feesPreNursery;
     if (extra.feesNursery     !== undefined) data.feesNursery     = extra.feesNursery;
     if (extra.feesBasic       !== undefined) data.feesBasic       = extra.feesBasic;
     if (extra.feesJSS         !== undefined) data.feesJSS         = extra.feesJSS;
@@ -529,7 +529,7 @@ export async function saveSession(session, term, schoolName, schoolLogo, termSta
     if (extra.principalRemark2 !== undefined) data.principalRemark2 = extra.principalRemark2;
     if (extra.principalRemark3 !== undefined) data.principalRemark3 = extra.principalRemark3;
     if (extra.principalRemark4 !== undefined) data.principalRemark4 = extra.principalRemark4;
-    // Head Teacher remarks (Basic/Nursery/Creche)
+    // Head Teacher remarks (Basic/Nursery/Pre Nursery)
     if (extra.htRemark1 !== undefined) data.htRemark1 = extra.htRemark1;
     if (extra.htRemark2 !== undefined) data.htRemark2 = extra.htRemark2;
     if (extra.htRemark3 !== undefined) data.htRemark3 = extra.htRemark3;
@@ -554,7 +554,7 @@ export async function getSession() {
     termStartDate: "", termEndDate: "",
     schoolAddress: "", schoolMotto: "", schoolPhone: "", schoolType: "",
     nextTermBegins: "",
-    feesCreche: "", feesNursery: "", feesBasic: "",
+    feesPreNursery: "", feesNursery: "", feesBasic: "",
     feesJSS: "", feesSSS: "", feesSecondary: "",
     principalRemark1: "", principalRemark2: "", principalRemark3: "", principalRemark4: "",
     htRemark1: "", htRemark2: "", htRemark3: "", htRemark4: "",

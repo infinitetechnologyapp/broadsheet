@@ -46,31 +46,31 @@ const SS_ARMS      = ["SS 1A","SS 1B","SS 2A","SS 2B","SS 3A","SS 3B"];
 const JS_ARMS_C    = ["JS 1A","JS 1B","JS 2A","JS 2B","JS 3A","JS 3B"];
 const BASIC_ARMS   = ["Basic 1A","Basic 1B","Basic 2A","Basic 2B","Basic 3A","Basic 3B","Basic 4A","Basic 4B","Basic 5A","Basic 5B"];
 const NURSERY_ARMS = ["Nursery 1A","Nursery 1B","Nursery 2A","Nursery 2B","Nursery 3A","Nursery 3B"];
-const CRECHE_ARMS  = ["CrecheA","CrecheB"];
+const PRE_NURSERY_ARMS  = ["Pre NurseryA","Pre NurseryB"];
 
 const ALL_ARMS = [
-  ...SS_ARMS, ...JS_ARMS_C, ...BASIC_ARMS, ...NURSERY_ARMS, ...CRECHE_ARMS
+  ...SS_ARMS, ...JS_ARMS_C, ...BASIC_ARMS, ...NURSERY_ARMS, ...PRE_NURSERY_ARMS
 ];
 
 const SS_CLASSES      = ["SS 1","SS 2","SS 3"];
 const JS_CLASSES      = ["JS 1","JS 2","JS 3"];
 const BASIC_CLASSES   = ["Basic 1","Basic 2","Basic 3","Basic 4","Basic 5"];
 const NURSERY_CLASSES = ["Nursery 1","Nursery 2","Nursery 3"];
-const CRECHE_CLASSES  = ["Creche"];
+const PRE_NURSERY_CLASSES  = ["Pre Nursery"];
 
 const ALL_CLASSES = [
-  ...SS_CLASSES, ...JS_CLASSES, ...BASIC_CLASSES, ...NURSERY_CLASSES, ...CRECHE_CLASSES
+  ...SS_CLASSES, ...JS_CLASSES, ...BASIC_CLASSES, ...NURSERY_CLASSES, ...PRE_NURSERY_CLASSES
 ];
 
 const TERM_LABELS = { "1":"1st Term","2":"2nd Term","3":"3rd Term" };
 
 // armToBase: strips last character (arm letter) + trims
-// "JS 1A" → "JS 1", "Basic 1A" → "Basic 1", "CrecheA" → "Creche"
+// "JS 1A" → "JS 1", "Basic 1A" → "Basic 1", "Pre NurseryA" → "Pre Nursery"
 const armToBase = arm => {
   if (!arm) return "";
   const t = arm.trim();
-  // Creche special case
-  if (t === "CrecheA" || t === "CrecheB") return "Creche";
+  // Pre Nursery special case
+  if (t === "Pre NurseryA" || t === "Pre NurseryB") return "Pre Nursery";
   return t.slice(0, -1).trim();
 };
 
@@ -455,7 +455,7 @@ function buildDropdowns() {
       { label:"Junior Secondary", list: JS_CLASSES },
       { label:"Basic",            list: BASIC_CLASSES },
       { label:"Nursery",          list: NURSERY_CLASSES },
-      { label:"Creche",           list: CRECHE_CLASSES }
+      { label:"Pre Nursery",           list: PRE_NURSERY_CLASSES }
     ];
     return groups.filter(g => g.list.some(c => classes.includes(c))).map(g =>
       `<optgroup label="${g.label}">${g.list.filter(c => classes.includes(c)).map(c => `<option value="${c}">${c}</option>`).join("")}</optgroup>`
@@ -577,7 +577,7 @@ async function loadSession() {
       setVal("schoolPhoneInput",   s.schoolPhone);
       setVal("schoolMottoInput",   s.schoolMotto);
       setVal("nextTermBeginsInput",s.nextTermBegins);
-      setVal("feesCrecheInput",    s.feesCreche);
+      setVal("feesPreNurseryInput",    s.feesPreNursery);
       setVal("feesNurseryInput",   s.feesNursery);
       setVal("feesBasicInput",     s.feesBasic);
       setVal("feesJSSInput",       s.feesJSS);
@@ -1843,7 +1843,7 @@ function sectionToArms(section) {
   if (section === "SS")      return [...SS_ARMS];
   if (section === "BASIC")   return [...BASIC_ARMS];
   if (section === "NURSERY") return [...NURSERY_ARMS];
-  if (section === "CRECHE")  return [...CRECHE_ARMS];
+  if (section === "PRE NURSERY")  return [...PRE_NURSERY_ARMS];
   return [...ALL_ARMS];
 }
 
@@ -1852,7 +1852,7 @@ function sectionLabel(section) {
   if (section === "SS")      return "Senior Secondary (SS)";
   if (section === "BASIC")   return "Basic (1–5)";
   if (section === "NURSERY") return "Nursery (1–3)";
-  if (section === "CRECHE")  return "Creche";
+  if (section === "PRE NURSERY")  return "PRE NURSING";
   if (section === "ALL")     return "All Sections";
   return section || "—";
 }
@@ -2015,7 +2015,7 @@ $("saveFeesBtn")?.addEventListener("click", async () => {
     await saveSession(s.session||"", s.currentTerm||"1", s.schoolName||"", s.schoolLogo||"",
       s.termStartDate||"", s.termEndDate||"", {
         nextTermBegins:  $("nextTermBeginsInput")?.value  || "",
-        feesCreche:      $("feesCrecheInput")?.value      || "",
+        feesPreNursery:      $("feesPreNurseryInput")?.value      || "",
         feesNursery:     $("feesNurseryInput")?.value     || "",
         feesBasic:       $("feesBasicInput")?.value       || "",
         feesJSS:         $("feesJSSInput")?.value         || "",
@@ -2403,7 +2403,7 @@ $("generateAnalyticsBtn")?.addEventListener("click", async () => {
   const btn = $("generateAnalyticsBtn"); btn.disabled = true; btn.textContent = "Generating...";
 
   // Detect section-wide options
-  const isSectionView = classBase === "__ALL__" || classBase === "__SECONDARY__" || classBase === "__BASIC_NURSERY_CRECHE__";
+  const isSectionView = classBase === "__ALL__" || classBase === "__SECONDARY__" || classBase === "__BASIC_NURSERY_PRENURSERY__";
 
   // Hide/show appropriate result sections
   const sectionSummaryEl = $("sectionSummaryResult");
@@ -2426,8 +2426,8 @@ $("generateAnalyticsBtn")?.addEventListener("click", async () => {
         sectionClasses = SS_CLASSES.concat(JS_CLASSES);
         sectionTitle   = "Secondary Section (SS + JS)";
       } else {
-        sectionClasses = BASIC_CLASSES.concat(NURSERY_CLASSES).concat(CRECHE_CLASSES);
-        sectionTitle   = "Basic, Nursery & Creche";
+        sectionClasses = BASIC_CLASSES.concat(NURSERY_CLASSES).concat(PRE_NURSERY_CLASSES);
+        sectionTitle   = "Basic, Nursery & Pre Nursery";
       }
 
       // Fetch all students + attendance + holidays for these classes
@@ -2673,7 +2673,7 @@ $("loadPerStudentBtn")?.addEventListener("click", async () => {
     // ── Detect section for Att B/F — B/F only accumulates within same section ──
     function getClassSection(cb) {
       var c = (cb||"").toLowerCase();
-      if (c.startsWith("creche"))  return "creche";
+      if (c.startsWith("Pre Nursery"))  return "Pre Nursery";
       if (c.startsWith("nursery")) return "nursery";
       if (c.startsWith("basic"))   return "basic";
       return "secondary"; // JS and SS share secondary
@@ -3180,7 +3180,7 @@ $("loadRecordBankBtn")?.addEventListener("click", async () => {
   if (!classVal) { toast("Select a class or section.", "error"); return; }
 
   // Resolve section values into class lists
-  var isSectionRb = classVal === "__ALL__" || classVal === "__SECONDARY__" || classVal === "__BASIC_NURSERY_CRECHE__";
+  var isSectionRb = classVal === "__ALL__" || classVal === "__SECONDARY__" || classVal === "__BASIC_NURSERY_PRENURSERY";
   var rbClasses = [];
   var rbLabel   = classVal;
   if (classVal === "__ALL__") {
@@ -3189,9 +3189,9 @@ $("loadRecordBankBtn")?.addEventListener("click", async () => {
   } else if (classVal === "__SECONDARY__") {
     rbClasses = SS_CLASSES.concat(JS_CLASSES);
     rbLabel   = "Secondary Section (SS + JS)";
-  } else if (classVal === "__BASIC_NURSERY_CRECHE__") {
-    rbClasses = BASIC_CLASSES.concat(NURSERY_CLASSES).concat(CRECHE_CLASSES);
-    rbLabel   = "Basic, Nursery & Creche";
+  } else if (classVal === "__BASIC_NURSERY_PRENURSERY__") {
+    rbClasses = BASIC_CLASSES.concat(NURSERY_CLASSES).concat(PRENURSERY_CLASSES);
+    rbLabel   = "Basic, Nursery & Pre Nursery";
   } else {
     rbClasses = [classVal];
     rbLabel   = classVal;
@@ -3663,7 +3663,7 @@ let _promStudents = [];
 
 // Full promotion chain — maps each class to its next class
 const PROMOTION_CHAIN = {
-  "Creche":    "Nursery 1",
+  "Pre Nursery":    "Nursery 1",
   "Nursery 1": "Nursery 2",
   "Nursery 2": "Nursery 3",
   "Nursery 3": "Basic 1",

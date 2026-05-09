@@ -775,7 +775,7 @@
                   <optgroup label="Junior Secondary"><option>JS 1</option><option>JS 2</option><option>JS 3</option></optgroup>
                   <optgroup label="Basic"><option>Basic 1</option><option>Basic 2</option><option>Basic 3</option><option>Basic 4</option><option>Basic 5</option></optgroup>
                   <optgroup label="Nursery"><option>Nursery 1</option><option>Nursery 2</option><option>Nursery 3</option></optgroup>
-                  <optgroup label="Creche"><option>Creche</option></optgroup>
+                  <optgroup label="Pre Nursery"><option>Pre Nursery</option></optgroup>
                 </select>
               </div>
               <button class="btn btn-success btn-sm" onclick="addFTRow()" style="height:38px"><i class="bi bi-plus-circle"></i> Add</button>
@@ -810,7 +810,7 @@
                   <option value="JS">Junior Secondary (JS)</option>
                   <option value="BASIC">Basic (1–5)</option>
                   <option value="NURSERY">Nursery (1–3)</option>
-                  <option value="CRECHE">Creche</option>
+                  <option value="PRE NURSERY">"Pre Nursery"</option>
                   <option value="ALL">All Sections</option>
                 </select>
               </div>
@@ -883,7 +883,7 @@
             <div class="form-group"><label class="form-label">Next Term Begins</label><input type="date" id="nextTermBeginsInput" class="form-control"/></div>
             <div style="font-weight:800;font-size:.85rem;margin:12px 0 8px;color:var(--text)">Next Term Fees (per section)</div>
             <div class="grid grid-2">
-              <div class="form-group"><label class="form-label">Creche Fees</label><input type="text" id="feesCrecheInput" class="form-control" placeholder="e.g. ₦45,000"/></div>
+              <div class="form-group"><label class="form-label">Pre Nursery Fees</label><input type="text" id="feesPreNurseryInput" class="form-control" placeholder="e.g. ₦45,000"/></div>
               <div class="form-group"><label class="form-label">Nursery Fees</label><input type="text" id="feesNurseryInput" class="form-control" placeholder="e.g. ₦50,000"/></div>
               <div class="form-group"><label class="form-label">Basic Fees</label><input type="text" id="feesBasicInput" class="form-control" placeholder="e.g. ₦55,000"/></div>
               <div class="form-group"><label class="form-label">Junior Secondary Fees</label><input type="text" id="feesJSSInput" class="form-control" placeholder="e.g. ₦60,000"/></div>
@@ -908,9 +908,9 @@
 
         <!-- Head Teacher Remarks -->
         <div class="card" style="margin-bottom:16px">
-          <div class="card-header"><h5><i class="bi bi-chat-quote-fill"></i> Head Teacher's Remarks (Basic / Nursery / Creche)</h5></div>
+          <div class="card-header"><h5><i class="bi bi-chat-quote-fill"></i> Head Teacher's Remarks (Basic / Nursery / Pre Nursery)</h5></div>
           <div class="card-body">
-            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">Set 4 remarks for different performance levels for Basic, Nursery and Creche students.</p>
+            <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:14px">Set 4 remarks for different performance levels for Basic, Nursery and Pre Nursery students.</p>
             <div class="form-group"><label class="form-label">Remark 1 — Top performers (1st — 5th)</label><input type="text" id="htRemark1" class="form-control" placeholder="e.g. Wonderful! Keep up the great work."/></div>
             <div class="form-group"><label class="form-label">Remark 2 — Good performers (6th — 10th)</label><input type="text" id="htRemark2" class="form-control" placeholder="e.g. Good effort. Keep trying hard."/></div>
             <div class="form-group"><label class="form-label">Remark 3 — Average performers (11th — 20th)</label><input type="text" id="htRemark3" class="form-control" placeholder="e.g. Satisfactory. More reading at home will help."/></div>
@@ -1162,7 +1162,7 @@
                     </optgroup>
                     <optgroup label="── By Section ──">
                       <option value="__SECONDARY__">Secondary Section (SS + JS)</option>
-                      <option value="__BASIC_NURSERY_CRECHE__">Basic, Nursery &amp; Creche</option>
+                      <option value="__BASIC_NURSERY_PRENURSERY__">Basic, Nursery &amp; Pre Nursery</option>
                     </optgroup>
                     <optgroup label="── Individual Class ──" id="analyticsClassGroup"></optgroup>
                   </select>
@@ -1319,7 +1319,7 @@
                   </optgroup>
                   <optgroup label="── By Section ──">
                     <option value="__SECONDARY__">Secondary Section (SS + JS)</option>
-                    <option value="__BASIC_NURSERY_CRECHE__">Basic, Nursery &amp; Creche</option>
+                    <option value="__BASIC_NURSERY_PRE NURSERY__">Basic, Nursery &amp; Pre Nursery</option>
                   </optgroup>
                   <optgroup label="── Individual Class ──" id="rbClassGroup"></optgroup>
                 </select>
@@ -1423,8 +1423,8 @@
             <optgroup label="Nursery">
               <option>Nursery 1</option><option>Nursery 2</option><option>Nursery 3</option>
             </optgroup>
-            <optgroup label="Creche">
-              <option>Creche</option>
+            <optgroup label="Pre Nursery">
+              <option>Pre Nursery</option>
             </optgroup>
           </select>
         </div>
