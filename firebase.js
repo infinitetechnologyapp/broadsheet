@@ -504,37 +504,65 @@ export async function getTeacherNames() {
   return snap.exists() ? (snap.data().names || {}) : {};
 }
 
-// SESSION
+// In firebase.js - REPLACE the entire saveSession function with this
+
 export async function saveSession(session, term, schoolName, schoolLogo, termStartDate, termEndDate, extra) {
+  // Get current session data before saving new one
+  const currentSnap = await getDoc(doc(db, "settings", "session"));
+  const currentData = currentSnap.exists() ? currentSnap.data() : null;
+  
+  // Check if session is changing (new academic year)
+  const sessionChanged = currentData && currentData.session && currentData.session !== session;
+  
+  // Check if term is changing (new term within same session)
+  const termChanged = currentData && 
+    currentData.session === session && 
+    currentData.currentTerm && 
+    String(currentData.currentTerm) !== String(term);
+  
+  // ── FREEZE LOGIC ────────────────────────────────────────────
+  if (currentData) {
+    // If session is changing: freeze ALL terms of the previous session
+    if (sessionChanged) {
+      for (let t = 1; t <= 3; t++) {
+        await freezeSession(currentData.session, String(t));
+      }
+      console.log("✅ Previous session frozen (all terms):", currentData.session);
+    }
+    // If term is changing within the same session: freeze ONLY the previous term
+    else if (termChanged) {
+      const prevTerm = currentData.currentTerm;
+      await freezeSession(session, String(prevTerm));
+      console.log(`✅ Previous term ${prevTerm} frozen for session:`, session);
+    }
+  }
+  
+  // ── SAVE NEW SESSION DATA ──────────────────────────────────
   const data = { session, currentTerm: String(term), updatedAt: serverTimestamp() };
   if (schoolName    !== undefined) data.schoolName    = schoolName;
   if (schoolLogo    !== undefined) data.schoolLogo    = schoolLogo;
   if (termStartDate !== undefined) data.termStartDate = termStartDate;
   if (termEndDate   !== undefined) data.termEndDate   = termEndDate;
-  // New school identity fields
+  
   if (extra) {
     if (extra.schoolAddress   !== undefined) data.schoolAddress   = extra.schoolAddress;
     if (extra.schoolMotto     !== undefined) data.schoolMotto     = extra.schoolMotto;
     if (extra.schoolPhone     !== undefined) data.schoolPhone     = extra.schoolPhone;
     if (extra.schoolType      !== undefined) data.schoolType      = extra.schoolType;
     if (extra.nextTermBegins  !== undefined) data.nextTermBegins  = extra.nextTermBegins;
-    // Next term fees per section
-    if (extra.feesPreNurseey      !== undefined) data.feesPreNursery      = extra.feesPreNursery;
+    if (extra.feesPreNursery  !== undefined) data.feesPreNursery  = extra.feesPreNursery;
     if (extra.feesNursery     !== undefined) data.feesNursery     = extra.feesNursery;
     if (extra.feesBasic       !== undefined) data.feesBasic       = extra.feesBasic;
     if (extra.feesJSS         !== undefined) data.feesJSS         = extra.feesJSS;
     if (extra.feesSSS         !== undefined) data.feesSSS         = extra.feesSSS;
-    // Principal remarks (Secondary)
     if (extra.principalRemark1 !== undefined) data.principalRemark1 = extra.principalRemark1;
     if (extra.principalRemark2 !== undefined) data.principalRemark2 = extra.principalRemark2;
     if (extra.principalRemark3 !== undefined) data.principalRemark3 = extra.principalRemark3;
     if (extra.principalRemark4 !== undefined) data.principalRemark4 = extra.principalRemark4;
-    // Head Teacher remarks (Basic/Nursery/Pre Nursery)
     if (extra.htRemark1 !== undefined) data.htRemark1 = extra.htRemark1;
     if (extra.htRemark2 !== undefined) data.htRemark2 = extra.htRemark2;
     if (extra.htRemark3 !== undefined) data.htRemark3 = extra.htRemark3;
     if (extra.htRemark4 !== undefined) data.htRemark4 = extra.htRemark4;
-    // Grading system
     if (extra.gradeA  !== undefined) data.gradeA  = extra.gradeA;
     if (extra.gradeB1 !== undefined) data.gradeB1 = extra.gradeB1;
     if (extra.gradeB2 !== undefined) data.gradeB2 = extra.gradeB2;
@@ -542,8 +570,17 @@ export async function saveSession(session, term, schoolName, schoolLogo, termSta
     if (extra.gradeD  !== undefined) data.gradeD  = extra.gradeD;
     if (extra.gradeF  !== undefined) data.gradeF  = extra.gradeF;
   }
+  
   await setDoc(doc(db, "settings", "session"), data, { merge: true });
+  
+  // ── SHOW TOAST MESSAGES ────────────────────────────────────
+  if (sessionChanged) {
+    console.log(`✅ New session "${session}" started. Previous session frozen.`);
+  } else if (termChanged) {
+    console.log(`✅ New term "${term}" started. Previous term ${currentData.currentTerm} frozen.`);
+  }
 }
+
 export async function getSession() {
   const snap = await getDoc(doc(db, "settings", "session"));
   if (snap.exists()) return snap.data();
@@ -688,4 +725,87 @@ export async function fixAllStudentClassArms() {
   });
   if (fixed > 0) await batch.commit();
   return { fixed, already };
+}
+
+/// ── SESSION FREEZE FUNCTIONS ──────────────────────────────────
+export async function freezeSession(session, term) {
+  if (!session || !term) {
+    console.warn("freezeSession: Session and term required");
+    return;
+  }
+
+  try {
+    const sessionPart = session.replace(/\//g, "-").replace(/\s+/g, "_");
+    const id = `${sessionPart}_term_${term}`.replace(/\s+/g, "_");
+    
+    await setDoc(doc(db, "frozenSessions", id), {
+      session: session,
+      term: String(term),
+      frozenAt: serverTimestamp(),
+      frozen: true,
+      label: `${session} - ${TERM_LABELS[term] || 'Term ' + term}`
+    }, { merge: true });
+    
+    console.log(`✅ Session frozen: ${session} - Term ${term}`);
+  } catch (error) {
+    console.error("Error freezing session:", error);
+  }
+}
+
+export async function isSessionFrozen(session, term) {
+  if (!session || !term) {
+    return false;
+  }
+
+  try {
+    const sessionPart = session.replace(/\//g, "-").replace(/\s+/g, "_");
+    const id = `${sessionPart}_term_${term}`.replace(/\s+/g, "_");
+    const snap = await getDoc(doc(db, "frozenSessions", id));
+    
+    if (!snap.exists()) {
+      return false;
+    }
+    
+    return snap.data().frozen === true;
+  } catch (error) {
+    console.error("Error checking frozen status:", error);
+    return false; // On error, assume not frozen
+  }
+}
+
+// ── SESSION FREEZE FUNCTIONS WITH CACHE ────────────────────────
+let _frozenSessionsCache = null;
+let _frozenSessionsCacheTime = 0;
+const FROZEN_CACHE_DURATION = 300000; // 5 minutes
+
+export async function getFrozenSessions() {
+  // ── CHECK CACHE ──────────────────────────────────────────
+  const now = Date.now();
+  if (_frozenSessionsCache && (now - _frozenSessionsCacheTime) < FROZEN_CACHE_DURATION) {
+    console.log("📦 Using cached frozen sessions");
+    return _frozenSessionsCache;
+  }
+  
+  try {
+    const snap = await getDocs(collection(db, "frozenSessions"));
+    const result = snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        session: data.session || "",
+        term: data.term || "",
+        label: data.label || `${data.session} - Term ${data.term}`,
+        frozenAt: data.frozenAt ? data.frozenAt.toDate() : null,
+        frozen: data.frozen === true
+      };
+    });
+    
+    _frozenSessionsCache = result;
+    _frozenSessionsCacheTime = now;
+    console.log(`💾 Cached ${result.length} frozen sessions`);
+    return result;
+  } catch (error) {
+    console.error("Error getting frozen sessions:", error);
+    return [];
+  }
 }

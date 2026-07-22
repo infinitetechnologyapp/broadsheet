@@ -131,15 +131,34 @@
       display:grid;
       grid-template-columns:70% 30%;
       gap:3px;
+      flex: 1;           /* ← Fills available space */
+      min-height: 0;      /* ← Allows flex shrink */
+    }
+
+    /* ── SCORE TABLE WRAPPER ── */
+    .rc-table-wrap {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
     }
 
     /* ── SCORE TABLE ── */
-    .rc-table { width:100%; border-collapse:collapse; font-size:7.5pt; }
+    .rc-table {
+      width:100%;
+      border-collapse:collapse;
+      font-size:7.5pt;
+      flex: 1;           /* ← Table grows to fill wrapper */
+    }
+
     .rc-table th {
-      /* WHITE bg, BLUE text — no blue background */
-      background:#fff; color:#1E40AF; font-weight:900;
-      text-align:center; padding:3px 2px;
-      border:1.5px solid #1E40AF; font-size:7pt; line-height:1.3;
+      background:#fff;
+      color:#1E40AF;
+      font-weight:900;
+      text-align:center;
+      padding:3px 2px;
+      border:1.5px solid #1E40AF;
+      font-size:7pt;
+      line-height:1.3;
     }
     .rc-table th.subj-col { text-align:left; width:38%; }
     .rc-table td {

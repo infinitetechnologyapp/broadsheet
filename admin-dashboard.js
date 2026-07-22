@@ -13,7 +13,7 @@ import {
   getStudentsByClass, getStudentsByClassArm, getStudentByReg,
   saveScore, saveScoresBatch, deleteScoreById, tagAllUntaggedScores,
   getScoresByClassArmSubjectTerm, getScoresByClassArmTerm,
-  getScoresByStudentTerm,
+  getScoresByStudentTerm, getScoresByClassTerm,
   saveClassSubjects, getClassSubjects, getSubjectsBySection,
   saveRemark, getRemarksByClassArmTerm, getRemarkByStudentTerm,
   saveSession, getSession, saveTeachers, getTeachers,
@@ -24,7 +24,8 @@ import {
   saveAttendance, saveAttendanceBatch, getAttendanceByClassDate,
   getAttendanceByClassTerm, getAttendanceByClassBaseTerm,
   getAllAttendanceByTerm, getAttendanceByStudent,
-  saveHoliday, deleteHoliday, getHolidays
+  saveHoliday, deleteHoliday, getHolidays, freezeSession, isSessionFrozen,
+  getFrozenSessions
 } from "./firebase.js";
 
 // ══════════════════════════════════════════════════════════════
@@ -279,6 +280,77 @@ setTimeout(function() {
 }, 30000); // 30 seconds instead of 15
 
 $("logoutBtn").addEventListener("click", async () => { await authLogout(); window.location.href = "admin-login.html"; });
+
+  // ── CACHE SERVICE ──────────────────────────────────────────────
+  const CACHE = {
+    // Cache durations (milliseconds)
+    DURATIONS: {
+      STUDENTS: 120000,      // 2 minutes
+      SESSION: 300000,       // 5 minutes
+      SCORES: 60000,         // 1 minute
+      ATTENDANCE: 120000,    // 2 minutes
+      FROZEN: 300000,        // 5 minutes
+      BROADSHEET: 60000,     // 1 minute
+      RECORD_BANK: 120000,   // 2 minutes
+      DASHBOARD: 60000       // 1 minute
+    },
+    
+    // Get cached data
+    get(key) {
+      try {
+        const item = localStorage.getItem(`cache_${key}`);
+        if (!item) return null;
+        const data = JSON.parse(item);
+        if (Date.now() - data.timestamp > this.DURATIONS[key] || 60000) {
+          localStorage.removeItem(`cache_${key}`);
+          return null;
+        }
+        return data.value;
+      } catch (e) {
+        return null;
+      }
+    },
+    
+    // Set cached data
+    set(key, value) {
+      try {
+        const data = {
+          timestamp: Date.now(),
+          value: value
+        };
+        localStorage.setItem(`cache_${key}`, JSON.stringify(data));
+      } catch (e) {
+        // localStorage full or unavailable
+      }
+    },
+    
+    // Clear specific cache
+    clear(key) {
+      localStorage.removeItem(`cache_${key}`);
+    },
+    
+    // Clear all caches
+    clearAll() {
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.startsWith('cache_')) {
+          localStorage.removeItem(key);
+        }
+      });
+    }
+  };
+
+  // ── CACHE KEYS ──────────────────────────────────────────────────
+  const CACHE_KEYS = {
+    STUDENTS: 'STUDENTS',
+    SESSION: 'SESSION',
+    SCORES: (classArm, subject, term) => `SCORES_${classArm}_${subject}_${term}`,
+    ATTENDANCE: (classArm, date) => `ATTENDANCE_${classArm}_${date}`,
+    FROZEN: 'FROZEN',
+    BROADSHEET: (classArm, term) => `BROADSHEET_${classArm}_${term}`,
+    RECORD_BANK: (session, term, classVal) => `RECORD_BANK_${session}_${term}_${classVal}`,
+    DASHBOARD: 'DASHBOARD'
+  };
 
 // ══════════════════════════════════════════════════════════════
 //  APPLY ROLE UI
@@ -545,99 +617,165 @@ let _currentSession = "";  // always holds the active session
 // Grading system — loaded from Firebase settings, used across broadsheet and score entry
 let _grading = { A:"86-100", B1:"71-85", B2:"61-70", C:"50-60", D:"39-49", F:"0-38" };
 
+// ── LOAD SESSION WITH CACHE ────────────────────────────────────
 async function loadSession() {
   try {
+    // ── CHECK CACHE FIRST ──────────────────────────────────────
+    const cachedSession = CACHE.get(CACHE_KEYS.SESSION);
+    if (cachedSession) {
+      console.log("📦 Loaded session from cache");
+      applySessionData(cachedSession);
+      return;
+    }
+    
+    // ── LOAD FROM FIRESTORE ────────────────────────────────────
     const s = await getSession();
-    _sessionCache = s; // Cache session — all other calls use this, zero extra reads
-    const t = s.currentTerm || "1";
-    _currentSession = s.session || "";  // store globally
-    $("statSession").textContent = s.session || "—";
-    $("statTerm").textContent    = TERM_LABELS[t] || "—";
+    _sessionCache = s;
+    _currentSession = s.session || "";
+    
+    // ── STORE IN CACHE ──────────────────────────────────────────
+    CACHE.set(CACHE_KEYS.SESSION, s);
+    console.log("💾 Cached session data");
+    
+    // Apply to UI
+    applySessionData(s);
+    
+  } catch(e) { 
+    console.error("loadSession error:", e); 
+  }
+}
 
-    // Sync term dropdowns across all sections
-    ["scoreTerm","subjectTerm","bsTerm","remarkTerm","approvalTerm",
-     "attTerm","analyticsTerm","perStudentTerm","rbTerm","resTerm"].forEach(id => {
-      const el = $(id); if (el) el.value = t;
-    });
+// ── APPLY SESSION DATA TO UI ───────────────────────────────────
+function applySessionData(s) {
+  const t = s.currentTerm || "1";
+  _currentSession = s.session || "";
+  $("statSession").textContent = s.session || "—";
+  $("statTerm").textContent = TERM_LABELS[t] || "—";
 
-    // Sync session input in record bank
-    // rbSession is now a select dropdown — populated separately
+  // Sync term dropdowns
+  ["scoreTerm","subjectTerm","bsTerm","remarkTerm","approvalTerm",
+   "attTerm","analyticsTerm","perStudentTerm","rbTerm","resTerm"].forEach(id => {
+    const el = $(id); if (el) el.value = t;
+  });
 
-    if (_isMaster) {
-      $("sessionInput").value    = s.session || "";
-      $("termInput").value       = t;
-      $("schoolNameInput").value = s.schoolName || "";
-      if (s.termStartDate) { const el = $("termStartDate"); if(el) el.value = s.termStartDate; }
-      if (s.termEndDate)   { const el = $("termEndDate");   if(el) el.value = s.termEndDate; }
-      updateTermWeeksDisplay(s.termStartDate, s.termEndDate);
-      // New school identity fields
-      var setVal = function(id, val) { var el = $(id); if(el) el.value = val || ""; };
-      setVal("schoolTypeInput",    s.schoolType);
-      setVal("schoolAddressInput", s.schoolAddress);
-      setVal("schoolPhoneInput",   s.schoolPhone);
-      setVal("schoolMottoInput",   s.schoolMotto);
-      setVal("nextTermBeginsInput",s.nextTermBegins);
-      setVal("feesPreNurseryInput",    s.feesPreNursery);
-      setVal("feesNurseryInput",   s.feesNursery);
-      setVal("feesBasicInput",     s.feesBasic);
-      setVal("feesJSSInput",       s.feesJSS);
-      setVal("feesSSSInput",       s.feesSSS);
-      // Principal remarks
-      setVal("principalRemark1", s.principalRemark1);
-      setVal("principalRemark2", s.principalRemark2);
-      setVal("principalRemark3", s.principalRemark3);
-      setVal("principalRemark4", s.principalRemark4);
-      // Head Teacher remarks
-      setVal("htRemark1", s.htRemark1);
-      setVal("htRemark2", s.htRemark2);
-      setVal("htRemark3", s.htRemark3);
-      setVal("htRemark4", s.htRemark4);
-      // Grading system
-      setVal("gradeAInput",  s.gradeA  || "86-100");
-      setVal("gradeB1Input", s.gradeB1 || "71-85");
-      setVal("gradeB2Input", s.gradeB2 || "61-70");
-      setVal("gradeCInput",  s.gradeC  || "50-60");
-      setVal("gradeDInput",  s.gradeD  || "39-49");
-      setVal("gradeFInput",  s.gradeF  || "0-38");
-      // Logo preview
-      if (s.schoolLogo) {
-        var prev = $("schoolLogoPreview");
-        if (prev) { prev.src = s.schoolLogo; prev.style.display = "block"; }
-      }
+  if (_isMaster) {
+    $("sessionInput").value = s.session || "";
+    $("termInput").value = t;
+    $("schoolNameInput").value = s.schoolName || "";
+    if (s.termStartDate) { const el = $("termStartDate"); if(el) el.value = s.termStartDate; }
+    if (s.termEndDate) { const el = $("termEndDate"); if(el) el.value = s.termEndDate; }
+    updateTermWeeksDisplay(s.termStartDate, s.termEndDate);
+    
+    // School identity fields
+    var setVal = function(id, val) { var el = $(id); if(el) el.value = val || ""; };
+    setVal("schoolTypeInput", s.schoolType);
+    setVal("schoolAddressInput", s.schoolAddress);
+    setVal("schoolPhoneInput", s.schoolPhone);
+    setVal("schoolMottoInput", s.schoolMotto);
+    setVal("nextTermBeginsInput", s.nextTermBegins);
+    setVal("feesPreNurseryInput", s.feesPreNursery);
+    setVal("feesNurseryInput", s.feesNursery);
+    setVal("feesBasicInput", s.feesBasic);
+    setVal("feesJSSInput", s.feesJSS);
+    setVal("feesSSSInput", s.feesSSS);
+    setVal("principalRemark1", s.principalRemark1);
+    setVal("principalRemark2", s.principalRemark2);
+    setVal("principalRemark3", s.principalRemark3);
+    setVal("principalRemark4", s.principalRemark4);
+    setVal("htRemark1", s.htRemark1);
+    setVal("htRemark2", s.htRemark2);
+    setVal("htRemark3", s.htRemark3);
+    setVal("htRemark4", s.htRemark4);
+    setVal("gradeAInput", s.gradeA || "86-100");
+    setVal("gradeB1Input", s.gradeB1 || "71-85");
+    setVal("gradeB2Input", s.gradeB2 || "61-70");
+    setVal("gradeCInput", s.gradeC || "50-60");
+    setVal("gradeDInput", s.gradeD || "39-49");
+    setVal("gradeFInput", s.gradeF || "0-38");
+    
+    if (s.schoolLogo) {
+      var prev = $("schoolLogoPreview");
+      if (prev) { prev.src = s.schoolLogo; prev.style.display = "block"; }
     }
-    // Always update _grading from Firebase settings (applies to all roles)
-    if (s.gradeA)  _grading.A  = s.gradeA;
-    if (s.gradeB1) _grading.B1 = s.gradeB1;
-    if (s.gradeB2) _grading.B2 = s.gradeB2;
-    if (s.gradeC)  _grading.C  = s.gradeC;
-    if (s.gradeD)  _grading.D  = s.gradeD;
-    if (s.gradeF)  _grading.F  = s.gradeF;
-    if (s.schoolName) {
-      _schoolName = s.schoolName;
-      const bn = $("brandName"); if (bn) bn.textContent = s.schoolName;
-    }
+  }
+  
+  // Update grading
+  if (s.gradeA) _grading.A = s.gradeA;
+  if (s.gradeB1) _grading.B1 = s.gradeB1;
+  if (s.gradeB2) _grading.B2 = s.gradeB2;
+  if (s.gradeC) _grading.C = s.gradeC;
+  if (s.gradeD) _grading.D = s.gradeD;
+  if (s.gradeF) _grading.F = s.gradeF;
+  if (s.schoolName) {
+    _schoolName = s.schoolName;
+    const bn = $("brandName"); if (bn) bn.textContent = s.schoolName;
+  }
 
-    // Current week of term — visible to all roles
-    const totalWeeks = countSchoolWeeks(s.termStartDate, s.termEndDate);
-    const cwEl = $("statCurrentWeek");
-    const twEl = $("statTotalWeeks");
-    if (cwEl) {
-      if (s.termStartDate) {
-        const today     = new Date();
-        const start     = new Date(s.termStartDate);
-        const diffDays  = Math.floor((today - start) / (1000*60*60*24));
-        const currentWk = diffDays >= 0 ? Math.min(Math.ceil((diffDays + 1) / 7), totalWeeks||99) : 0;
-        // Break "Week" and number onto separate lines
-        cwEl.innerHTML  = currentWk > 0
-          ? `<span style="font-size:.65rem;font-weight:700;display:block;color:#16a34a">WEEK</span><span style="font-size:1.6rem;font-weight:900;line-height:1;color:#16a34a">${currentWk}</span>`
-          : "—";
-        if (twEl) twEl.textContent = totalWeeks > 0 ? totalWeeks + " weeks this term" : "Set term dates in Settings";
-      } else {
-        cwEl.innerHTML = `<span style="font-size:.75rem;color:var(--text-muted)">Set term<br>dates</span>`;
-        if (twEl) twEl.textContent = "Set term dates in Settings";
-      }
+  // Current week display
+  const totalWeeks = countSchoolWeeks(s.termStartDate, s.termEndDate);
+  const cwEl = $("statCurrentWeek");
+  const twEl = $("statTotalWeeks");
+  if (cwEl) {
+    if (s.termStartDate) {
+      const today = new Date();
+      const start = new Date(s.termStartDate);
+      const diffDays = Math.floor((today - start) / (1000*60*60*24));
+      const currentWk = diffDays >= 0 ? Math.min(Math.ceil((diffDays + 1) / 7), totalWeeks||99) : 0;
+      cwEl.innerHTML = currentWk > 0
+        ? `<span style="font-size:.65rem;font-weight:700;display:block;color:#16a34a">WEEK</span><span style="font-size:1.6rem;font-weight:900;line-height:1;color:#16a34a">${currentWk}</span>`
+        : "—";
+      if (twEl) twEl.textContent = totalWeeks > 0 ? totalWeeks + " weeks this term" : "Set term dates in Settings";
+    } else {
+      cwEl.innerHTML = `<span style="font-size:.75rem;color:var(--text-muted)">Set term<br>dates</span>`;
+      if (twEl) twEl.textContent = "Set term dates in Settings";
     }
-  } catch(e) { console.error(e); }
+  }
+  
+  // Load frozen sessions (with cache)
+  loadFrozenSessions();
+}
+
+// ── LOAD FROZEN SESSIONS WITH CACHE ────────────────────────────
+async function loadFrozenSessions() {
+  if (!_isMaster) return;
+  
+  try {
+    const cachedFrozen = CACHE.get(CACHE_KEYS.FROZEN);
+    let frozenSessions;
+    
+    if (cachedFrozen) {
+      console.log("📦 Loaded frozen sessions from cache");
+      frozenSessions = cachedFrozen;
+    } else {
+      frozenSessions = await getFrozenSessions();
+      CACHE.set(CACHE_KEYS.FROZEN, frozenSessions);
+      console.log("💾 Cached frozen sessions");
+    }
+    
+    if (frozenSessions.length) {
+      const frozenList = frozenSessions.map(f => 
+        `${f.session} - ${TERM_LABELS[f.term] || 'Term ' + f.term}`
+      );
+      
+      // Remove existing notice if any
+      const existingNotice = document.querySelector('#frozenSessionsNotice');
+      if (existingNotice) existingNotice.remove();
+      
+      const notice = document.createElement('div');
+      notice.id = 'frozenSessionsNotice';
+      notice.style.cssText = 'background:#fef3c7;border-radius:8px;padding:12px 16px;margin-top:12px;font-size:.8rem;border-left:4px solid #f59e0b';
+      notice.innerHTML = `
+        <i class="bi bi-lock-fill" style="color:#d97706"></i>
+        <strong style="color:#92400e">Frozen Sessions:</strong>
+        <span style="color:#78350f">${frozenList.join(', ')}</span>
+        <br><small style="color:#92400e">These sessions are locked and cannot be edited.</small>
+      `;
+      const container = document.querySelector('#section-school-config .card-body');
+      if (container) container.prepend(notice);
+    }
+  } catch (e) {
+    console.warn("Could not load frozen sessions:", e);
+  }
 }
 
 // ── Calculate and display term weeks ────────────────────────────
@@ -672,39 +810,44 @@ function updateTermWeeksDisplay(startDate, endDate) {
   });
 });
 
+// ── LOAD STUDENTS WITH CACHE ───────────────────────────────────
 async function loadStudents() {
   try {
-    // Smart loading — only load what each role needs
-    // Admin needs all students (full management view)
-    // Form Teacher only needs their own class arm (saves ~475 reads per login)
-    // Subject Teacher only needs their assigned arms
+    // ── CHECK CACHE FIRST ──────────────────────────────────────
+    const cachedStudents = CACHE.get(CACHE_KEYS.STUDENTS);
+    if (cachedStudents) {
+      _students = cachedStudents;
+      console.log(`📦 Loaded ${_students.length} students from cache`);
+      renderStudentTable(_students);
+      if (_isMaster) loadDashboardAnalytics();
+      return;
+    }
+    
+    // ── LOAD FROM FIRESTORE ────────────────────────────────────
     if (_isMaster) {
       _students = await getActiveStudents();
     } else if (_isFT && !_isST) {
-      // Form Teacher — load only their class (both arms for population count)
-      var armA = _ftClass + "A";
-      var armB = _ftClass + "B";
-      var results = await Promise.all([
+      const armA = _ftClass + "A";
+      const armB = _ftClass + "B";
+      const results = await Promise.all([
         getStudentsByClassArm(armA),
         getStudentsByClassArm(armB)
       ]);
       _students = results[0].concat(results[1]);
     } else if (_isST && !_isFT) {
-      // Subject Teacher — load only their assigned arms
-      var stResults = await Promise.all(_stArms.map(function(arm){ return getStudentsByClassArm(arm); }));
-      _students = stResults.reduce(function(acc, arr){ return acc.concat(arr); }, []);
+      const stResults = await Promise.all(_stArms.map(arm => getStudentsByClassArm(arm)));
+      _students = stResults.reduce((acc, arr) => acc.concat(arr), []);
     } else if (_isFT && _isST) {
-      // Dual role — load FT class + ST arms
-      var ftArmA = _ftClass + "A";
-      var ftArmB = _ftClass + "B";
-      var allArms = [ftArmA, ftArmB].concat(_stArms.filter(function(a){ return a !== ftArmA && a !== ftArmB; }));
-      var dualResults = await Promise.all(allArms.map(function(arm){ return getStudentsByClassArm(arm); }));
-      _students = dualResults.reduce(function(acc, arr){ return acc.concat(arr); }, []);
+      const ftArmA = _ftClass + "A";
+      const ftArmB = _ftClass + "B";
+      const allArms = [ftArmA, ftArmB].concat(_stArms.filter(a => a !== ftArmA && a !== ftArmB));
+      const dualResults = await Promise.all(allArms.map(arm => getStudentsByClassArm(arm)));
+      _students = dualResults.reduce((acc, arr) => acc.concat(arr), []);
     } else {
       _students = await getActiveStudents();
     }
 
-    // Remove duplicates (in case arms overlap)
+    // Remove duplicates
     var seen = {};
     _students = _students.filter(function(s){
       if (seen[s.regNumber]) return false;
@@ -712,16 +855,24 @@ async function loadStudents() {
       return true;
     });
 
-    const male    = _students.filter(s => s.gender === "Male").length;
-    const female  = _students.filter(s => s.gender === "Female").length;
+    // ── STORE IN CACHE ──────────────────────────────────────────
+    CACHE.set(CACHE_KEYS.STUDENTS, _students);
+    console.log(`💾 Cached ${_students.length} students`);
+
+    // Update UI
+    const male = _students.filter(s => s.gender === "Male").length;
+    const female = _students.filter(s => s.gender === "Female").length;
     const classes = new Set(_students.map(s => s.classBase)).size;
     $("statStudents").textContent = _students.length;
-    const sm = $("statMale");   if (sm) sm.textContent = male;
+    const sm = $("statMale"); if (sm) sm.textContent = male;
     const sf = $("statFemale"); if (sf) sf.textContent = female;
     const sc = $("statClasses"); if (sc) sc.textContent = classes;
     renderStudentTable(_students);
     if (_isMaster) loadDashboardAnalytics();
-  } catch(e) { console.error("loadStudents:", e); }
+    
+  } catch(e) { 
+    console.error("loadStudents:", e); 
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1157,75 +1308,115 @@ async function refreshSubjectDropdown() {
 $("scoreClassArm").addEventListener("change", refreshSubjectDropdown);
 $("scoreTerm").addEventListener("change",     refreshSubjectDropdown);
 
+// ── LOAD SCORES WITH CACHE ─────────────────────────────────────
 $("loadScoresBtn").addEventListener("click", async () => {
-  const classArm  = $("scoreClassArm").value;
-  const term      = $("scoreTerm").value;
-  const subject   = $("scoreSubject").value;
+  const classArm = $("scoreClassArm").value;
+  const term = $("scoreTerm").value;
+  const subject = $("scoreSubject").value;
   const classBase = classArm ? armToBase(classArm) : "";
 
+  // Check if frozen
+  const sessionData = _sessionCache || await getSession();
+  const isFrozen = await isSessionFrozen(sessionData.session, term);
+  
+  const warningEl = $("frozenSessionWarning");
+  if (isFrozen) {
+    warningEl.style.display = "block";
+    $("saveScoresBtn").style.display = "none";
+    toast("⚠️ This term/session is FROZEN. No changes can be made.", "warning");
+  } else {
+    warningEl.style.display = "none";
+    $("saveScoresBtn").style.display = "inline-flex";
+  }
+
   if (!classArm) { toast("Select a class arm.", "error"); return; }
-  if (!term)     { toast("Select a term.", "error"); return; }
-  if (!subject)  { toast("Select a subject.", "error"); return; }
+  if (!term) { toast("Select a term.", "error"); return; }
+  if (!subject) { toast("Select a subject.", "error"); return; }
 
   // Authorization check
   if (!_isMaster) {
     if (_isFT && !_isST) {
-      // Form teacher — any subject, but only their own class
       if (armToBase(classArm) !== _ftClass) {
-        toast(`You can only enter scores for your class (${_ftClass}).`, "error"); return;
+        toast(`You can only enter scores for your class (${_ftClass}).`, "error");
+        return;
       }
     } else if (_isST && !_isFT) {
-      // Subject teacher — any class/arm is fine, but only their assigned subjects
       if (!_stSubjects.includes(subject)) {
-        toast(`You are not assigned to teach "${subject}".`, "error"); return;
+        toast(`You are not assigned to teach "${subject}".`, "error");
+        return;
       }
     } else if (_isFT && _isST) {
-      // Dual role — any subject in FT class, OR assigned subjects in any arm
       const inFTClass = armToBase(classArm) === _ftClass;
-      const inSTSub   = _stSubjects.includes(subject);
+      const inSTSub = _stSubjects.includes(subject);
       if (!inFTClass && !inSTSub) {
-        toast(`Not authorized for this class/subject combination.`, "error"); return;
+        toast(`Not authorized for this class/subject combination.`, "error");
+        return;
       }
     }
   }
 
-  const btn = $("loadScoresBtn"); btn.disabled = true; btn.textContent = "Loading…";
+  const btn = $("loadScoresBtn");
+  btn.disabled = true;
+  btn.textContent = "Loading…";
+  
   try {
-    // FIX #8: Always fresh fetch — this gives us fullName + all fields
+    // ── CHECK CACHE ──────────────────────────────────────────────
+    const cacheKey = CACHE_KEYS.SCORES(classArm, subject, term);
+    const cachedData = CACHE.get(cacheKey);
+    
+    if (cachedData) {
+      console.log(`📦 Loaded scores from cache: ${classArm} - ${subject} - ${TERM_LABELS[term]}`);
+      _scoreStudents = cachedData.students;
+      _scoreData = cachedData.scoreData;
+      _scoreMap = cachedData.scoreMap;
+      
+      renderScoreTable(classArm, subject, term);
+      $("scoresCardTitle").innerHTML =
+        `<i class="bi bi-list-check"></i> ${classArm} — ${subject} — ${TERM_LABELS[term]}
+         <span class="badge badge-muted" style="margin-left:8px">${_scoreStudents.length} student(s) (cached)</span>`;
+      $("scoresCard").style.display = "block";
+      
+      toast(`${_scoreStudents.length} student(s) loaded from cache.`, "success");
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load';
+      return;
+    }
+    
+    // ── LOAD FROM FIRESTORE ────────────────────────────────────
     const all = await getStudentsByClassArm(classArm);
 
-    // Filter to only students offering this subject
     _scoreStudents = all.filter(function(s) {
       var offAll = !s.subjectsOffered || s.subjectsOffered === "all";
       return offAll || (Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(subject));
     }).sort((a, b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
 
-    // Load existing saved scores — no session filter so old scores still appear
     const saved = await getScoresByClassArmSubjectTerm(classArm, subject, term);
     _scoreData = {};
 
-    // Silently tag old scores (no session field) with current session
-    // Creates new doc with session in ID, then deletes the old untagged doc
-    // This ensures old scores belong to current session and won't bleed into future sessions
+    // Tag untagged scores
     const untagged = saved.filter(sc => !sc.session && _currentSession);
     if (untagged.length && _currentSession) {
       Promise.all(untagged.map(async function(sc) {
-        // 1. Save new doc with session tagged
         await saveScore(Object.assign({}, sc, { session: _currentSession }));
-        // 2. Delete old doc (no session in ID) so it never bleeds into future sessions
         if (sc.id) await deleteScoreById(sc.id);
       })).catch(function(e) { console.warn("Session tagging failed:", e); });
     }
 
-    // Include scores: matching current session OR still-untagged old ones
     saved.forEach(sc => {
       if (!sc.session || sc.session === _currentSession) {
         _scoreData[sc.regNumber] = sc;
       }
     });
 
-    // Cache score map for skip-unchanged optimization in save handler
     _scoreMap = Object.assign({}, _scoreData);
+
+    // ── STORE IN CACHE ──────────────────────────────────────────
+    CACHE.set(cacheKey, {
+      students: _scoreStudents,
+      scoreData: _scoreData,
+      scoreMap: _scoreMap
+    });
+    console.log(`💾 Cached scores: ${classArm} - ${subject} - ${TERM_LABELS[term]}`);
 
     renderScoreTable(classArm, subject, term);
     $("scoresCardTitle").innerHTML =
@@ -1239,8 +1430,14 @@ $("loadScoresBtn").addEventListener("click", async () => {
         : `No students found in ${classArm}. Add students first.`,
       _scoreStudents.length ? "success" : "warning"
     );
-  } catch(e) { toast(e.message, "error"); console.error(e); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load'; }
+    
+  } catch(e) { 
+    toast(e.message, "error"); 
+    console.error(e); 
+  } finally { 
+    btn.disabled = false; 
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load'; 
+  }
 });
 
 // FIX #8: Names clearly visible — font-weight:700 on name cell
@@ -1307,31 +1504,45 @@ function liveTotal(reg) {
   const gc = $(`grd_${reg}`); if (gc) { gc.textContent = g; gc.className = gradeClass(g); }
 }
 
+// ── SAVE SCORES WITH CACHE CLEARING ────────────────────────────
 $("saveScoresBtn").addEventListener("click", async () => {
-  const classArm  = $("scoreClassArm").value;
-  const term      = $("scoreTerm").value;
-  const subject   = $("scoreSubject").value;
+  const classArm = $("scoreClassArm").value;
+  const term = $("scoreTerm").value;
+  const subject = $("scoreSubject").value;
   const classBase = classArm ? armToBase(classArm) : "";
+  
   if (!classArm || !term || !subject || !_scoreStudents.length) {
-    toast("Load students first before saving.", "error"); return;
+    toast("Load students first before saving.", "error");
+    return;
   }
+  
+  // Check if frozen
   const sessionData = _sessionCache || await getSession();
-  const session     = sessionData.session || "";
-  const btn = $("saveScoresBtn"); btn.disabled = true; btn.textContent = "Uploading…";
+  const isFrozen = await isSessionFrozen(sessionData.session, term);
+  if (isFrozen) {
+    toast("⚠️ This term/session is FROZEN. No changes can be made.", "error");
+    return;
+  }
+  
+  const session = sessionData.session || "";
+  const btn = $("saveScoresBtn");
+  btn.disabled = true;
+  btn.textContent = "Uploading…";
+  
   try {
-    // Build scores array — skip unchanged scores to save writes
+    // Build scores array — skip unchanged scores
     var scoresToSave = [];
     _scoreStudents.forEach(function(s) {
       var t1 = Math.min(Math.max(parseInt($("t1_"+s.regNumber)?.value)||0, 0), 20);
       var t2 = Math.min(Math.max(parseInt($("t2_"+s.regNumber)?.value)||0, 0), 20);
       var ex = Math.min(Math.max(parseInt($("ex_"+s.regNumber)?.value)||0, 0), 60);
-      // Check if score changed from what was loaded — skip if unchanged
+      
       var existing = _scoreMap && _scoreMap[s.regNumber];
       if (existing &&
           (existing.test1||0) === t1 &&
           (existing.test2||0) === t2 &&
           (existing.exam||0)  === ex) {
-        return; // Unchanged — skip write
+        return;
       }
       scoresToSave.push({
         regNumber: s.regNumber, fullName: s.fullName,
@@ -1343,68 +1554,138 @@ $("saveScoresBtn").addEventListener("click", async () => {
 
     if (!scoresToSave.length) {
       toast("No changes detected — nothing to save.", "info");
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-cloud-upload-fill"></i> Save & Upload Scores';
       return;
     }
 
-    // Batch write — atomic, all or nothing, one network call
     await saveScoresBatch(scoresToSave);
+    
+    // ── CLEAR ALL RELEVANT CACHES ──────────────────────────────
+    // Clear specific score cache
+    const scoreCacheKey = CACHE_KEYS.SCORES(classArm, subject, term);
+    CACHE.clear(scoreCacheKey);
+    
+    // Clear broadsheet cache for this class/term
+    const broadsheetCacheKey = CACHE_KEYS.BROADSHEET(classArm, term);
+    CACHE.clear(broadsheetCacheKey);
+    
+    // Clear dashboard cache (stats changed)
+    CACHE.clear(CACHE_KEYS.DASHBOARD);
+    
+    // Clear any record bank cache for this session/term
+    if (session) {
+      const rbCacheKey = CACHE_KEYS.RECORD_BANK(session, term, classBase);
+      CACHE.clear(rbCacheKey);
+    }
+    
+    // Clear in-memory broadsheet cache
+    _bsCache = null;
+    
+    console.log(`🗑️ Cleared caches for: ${classArm} - ${subject} - ${TERM_LABELS[term]}`);
+    
     toast("Scores uploaded (" + scoresToSave.length + " changed) — " + subject + " / " + classArm + " / " + TERM_LABELS[term] + ".", "success");
-  } catch(e) { toast(e.message, "error"); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-cloud-upload-fill"></i> Save & Upload Scores'; }
+    
+  } catch(e) {
+    toast(e.message, "error");
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-cloud-upload-fill"></i> Save & Upload Scores';
+  }
 });
 
 // ══════════════════════════════════════════════════════════════
 //  BROADSHEET — FIX #9: Works for form teachers
 // ══════════════════════════════════════════════════════════════
+// ── LOAD BROADSHEET WITH CACHE ─────────────────────────────────
 $("loadBroadsheetBtn").addEventListener("click", async () => {
-  const classArm  = $("bsClassArm").value;
-  const term      = $("bsTerm").value;
+  const classArm = $("bsClassArm").value;
+  const term = $("bsTerm").value;
   const classBase = classArm ? armToBase(classArm) : "";
   if (!classArm || !term) { toast("Select class arm and term.", "error"); return; }
 
-  const btn = $("loadBroadsheetBtn"); btn.disabled = true; btn.textContent = "Building…";
+  const btn = $("loadBroadsheetBtn");
+  btn.disabled = true;
+  btn.textContent = "Building…";
+  
   try {
+    // ── CHECK CACHE ──────────────────────────────────────────────
+    const cacheKey = CACHE_KEYS.BROADSHEET(classArm, term);
+    const cachedData = CACHE.get(cacheKey);
+    
+    if (cachedData) {
+      console.log(`📦 Loaded broadsheet from cache: ${classArm} - ${TERM_LABELS[term]}`);
+      renderBroadsheet(classArm, term, cachedData.students, cachedData.allScores, cachedData.subjects);
+      $("broadsheetCard").style.display = "block";
+      $("downloadExcelBtn").style.display = "inline-flex";
+      _bsCache = cachedData;
+      
+      // Show frozen badge if data is frozen
+      const sessionData = _sessionCache || await getSession();
+      const isFrozen = await isSessionFrozen(sessionData.session, term);
+      const headerEl = $("broadsheetHeader").querySelector("h5");
+      if (headerEl && isFrozen) {
+        headerEl.innerHTML = `<i class="bi bi-table"></i> ${classArm} Broadsheet — ${TERM_LABELS[term]}
+          <span class="badge" style="background:#f59e0b;color:#fff;margin-left:8px">
+            <i class="bi bi-lock-fill"></i> FROZEN (cached)
+          </span>
+          <span class="badge badge-muted" style="margin-left:4px">${cachedData.students.length} Students</span>`;
+      }
+      
+      toast(`Loaded from cache (${cachedData.students.length} students).`, "info");
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load';
+      return;
+    }
+    
+    // ── LOAD FROM FIRESTORE ────────────────────────────────────
     const [students, allScoresRaw, subjectsFromList] = await Promise.all([
       getStudentsByClassArm(classArm),
       getScoresByClassArmTerm(classArm, term),
       getClassSubjects(classBase, term, _currentSession)
     ]);
+    
     const allScores = allScoresRaw.filter(sc => !sc.session || sc.session === _currentSession);
     if (!students.length) { toast("No students found in this class arm.", "warning"); return; }
 
-    // Only show students who have at least one score recorded for this term/session
-    // This prevents newly added students (who didn't participate this term) from
-    // appearing in the broadsheet with all blank/N/A entries
     const studentsWithScores = new Set(allScores.map(sc => sc.regNumber));
     const activeStudents = students.filter(s => studentsWithScores.has(s.regNumber));
     if (!activeStudents.length) { toast("No scores recorded for any student in this class/term yet.", "warning"); return; }
 
-    // Build subject columns from TWO sources merged:
-    // 1. The class subjects list for this term (current config) — preserves saved order
-    // 2. Any subject found directly in score data for this term
-    // This ensures subjects removed in a later term still appear correctly
-    // in previous term broadsheets where scores already exist for them
-    // NOTE: No .sort() — Set insertion order preserves the original saved priority
     const subjectSet = new Set(subjectsFromList);
     allScores.forEach(sc => {
-      // Only add subject if score belongs to this term — prevents new term
-      // subjects bleeding into old term broadsheet columns
       if (sc.subject && String(sc.term) === String(term)) {
         subjectSet.add(sc.subject);
       }
     });
-    const subjects = Array.from(subjectSet); // insertion order = saved priority order
+    const subjects = Array.from(subjectSet);
 
     if (!subjects.length) { toast("No subjects or scores found for this class/term.", "warning"); return; }
 
-    // Cache broadsheet data — Excel download reuses this, zero extra reads
-    _bsCache = { classArm, term, students: activeStudents, allScores, subjects };
+    // ── STORE IN CACHE ──────────────────────────────────────────
+    const cacheData = { 
+      classArm, 
+      term, 
+      students: activeStudents, 
+      allScores, 
+      subjects 
+    };
+    CACHE.set(cacheKey, cacheData);
+    console.log(`💾 Cached broadsheet: ${classArm} - ${TERM_LABELS[term]}`);
 
+    _bsCache = cacheData;
     renderBroadsheet(classArm, term, activeStudents, allScores, subjects);
-    $("broadsheetCard").style.display  = "block";
+    $("broadsheetCard").style.display = "block";
     $("downloadExcelBtn").style.display = "inline-flex";
-  } catch(e) { toast(e.message, "error"); console.error(e); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load'; }
+    
+  } catch(e) { 
+    toast(e.message, "error"); 
+    console.error(e); 
+  } finally { 
+    btn.disabled = false; 
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load'; 
+  }
 });
 
 function renderBroadsheet(classArm, term, students, allScores, subjects) {
@@ -1553,18 +1834,17 @@ $("downloadExcelBtn").addEventListener("click", async function() {
   }
 
   var btn = $("downloadExcelBtn");
-  btn.disabled = true; btn.textContent = "Generating...";
+  btn.disabled = true;
+  btn.textContent = "Generating...";
 
   try {
-    // Reuse cached broadsheet data — ZERO extra Firestore reads
-    // Only fetch session (lightweight — 1 read, usually cached)
+    // Reuse cached broadsheet data
     var students, allScores, subjects;
     if (_bsCache && _bsCache.classArm === classArm && _bsCache.term === term) {
       students  = _bsCache.students;
       allScores = _bsCache.allScores;
       subjects  = _bsCache.subjects;
     } else {
-      // Fallback — reload if cache mismatch
       var results = await Promise.all([
         getStudentsByClassArm(classArm),
         getScoresByClassArmTerm(classArm, term),
@@ -1611,13 +1891,12 @@ $("downloadExcelBtn").addEventListener("click", async function() {
 
     // Subject stats + per-subject position map
     var subjAvg = {}, subjHigh = {}, subjLow = {};
-    var subjectPosMap = {}; // subjectPosMap[subject][regNumber] = "1st", "2nd" etc.
+    var subjectPosMap = {};
     subjects.forEach(function(sub) {
       var tots = rows.filter(function(r) { return r.offered.includes(sub); }).map(function(r) {
         var sc = scoreMap[r.regNumber] && scoreMap[r.regNumber][sub];
         return { reg: r.regNumber, total: sc ? (sc.test1||0)+(sc.test2||0)+(sc.exam||0) : 0 };
       });
-      // Sort descending for position
       var sorted = tots.slice().sort(function(a,b){ return b.total - a.total; });
       subjectPosMap[sub] = {};
       sorted.forEach(function(item, i) {
@@ -1639,27 +1918,29 @@ $("downloadExcelBtn").addEventListener("click", async function() {
     wsData.push(["Form Teacher: " + ftEmail]);
     wsData.push([""]);
 
-    // TABLE HEADER ROW 1 — subject group labels
+    // ── TABLE HEADER ROW 1 — subject names ──────────────────
     var h1 = ["S/N", "Student Name", "Reg No."];
-    subjects.forEach(function(s) { h1.push(s, "", "", "", ""); });
+    subjects.forEach(function(s) { 
+      h1.push(s);      // Subject name
+      h1.push("", "", "", ""); // 4 empty cells for T1, T2, Exam, Total, Pos
+    });
     h1.push("Grand Total", "Average", "Position");
     wsData.push(h1);
 
-    // TABLE HEADER ROW 2 — sub-columns
+    // ── TABLE HEADER ROW 2 — sub-columns ────────────────────
     var h2 = ["", "", ""];
     subjects.forEach(function() { h2.push("T1", "T2", "Exam", "Total", "Pos"); });
     h2.push("", "", "");
     wsData.push(h2);
 
-    // STUDENT ROWS
+    // ── STUDENT ROWS ──────────────────────────────────────────
     rows.forEach(function(r, idx) {
       var row = [idx + 1, r.fullName || "-", r.regNumber];
       subjects.forEach(function(sub) {
         if (!r.offered.includes(sub)) {
           row.push("N/A", "", "", "", "");
         } else {
-      // Replace zero scores with dash — students who didn't take exam show -
-      var sc = scoreMap[r.regNumber] && scoreMap[r.regNumber][sub];
+          var sc = scoreMap[r.regNumber] && scoreMap[r.regNumber][sub];
           var t1 = sc && sc.test1 ? sc.test1 : "-";
           var t2 = sc && sc.test2 ? sc.test2 : "-";
           var ex = sc && sc.exam  ? sc.exam  : "-";
@@ -1675,7 +1956,7 @@ $("downloadExcelBtn").addEventListener("click", async function() {
       wsData.push(row);
     });
 
-    // SUMMARY ROWS
+    // ── SUMMARY ROWS ──────────────────────────────────────────
     var avgRow  = ["", "CLASS AVERAGE",  ""];
     var highRow = ["", "HIGHEST SCORE",  ""];
     var lowRow  = ["", "LOWEST SCORE",   ""];
@@ -1687,26 +1968,39 @@ $("downloadExcelBtn").addEventListener("click", async function() {
     avgRow.push("", "", "");  highRow.push("", "", "");  lowRow.push("", "", "");
     wsData.push(avgRow); wsData.push(highRow); wsData.push(lowRow);
 
-    // FOOTER
+    // ── FOOTER ──────────────────────────────────────────────────
     wsData.push([""]);
     wsData.push(["Signature: ___________________________"]);
     wsData.push(["Generated by SchoolNova system"]);
     wsData.push(["Date Generated: " + new Date().toLocaleDateString("en-GB", {day:"2-digit",month:"long",year:"numeric"})]);
 
-    // BUILD WORKBOOK
+    // ── BUILD WORKBOOK ──────────────────────────────────────────
     var wb = XLSX.utils.book_new();
     var ws = XLSX.utils.aoa_to_sheet(wsData);
 
-    // Column widths
+    // ── COLUMN WIDTHS ──────────────────────────────────────────
     var cw = [{wch:5},{wch:30},{wch:15}];
-    subjects.forEach(function() { cw.push({wch:5},{wch:5},{wch:6},{wch:7},{wch:5}); });
+    subjects.forEach(function() { cw.push({wch:8},{wch:8},{wch:8},{wch:10},{wch:6}); });
     cw.push({wch:12},{wch:9},{wch:9});
     ws["!cols"] = cw;
+
+    // ── MERGE SUBJECT HEADER CELLS ──────────────────────────────
+    // Row 5 is the subject name row (0-indexed)
+    var mergeStartCol = 3; // Start after S/N, Student Name, Reg No.
+    if (!ws["!merges"]) ws["!merges"] = [];
+    
+    subjects.forEach(function(sub, idx) {
+      var col = mergeStartCol + (idx * 5);
+      ws["!merges"].push({
+        s: { r: 5, c: col },
+        e: { r: 5, c: col + 4 }
+      });
+    });
 
     var sheetName = classArm.replace(/[\/\\*?\[\]]/g,"").substring(0,31);
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-    // DOWNLOAD
+    // ── DOWNLOAD ──────────────────────────────────────────────────
     var wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     var blob  = new Blob([wbout], { type: "application/octet-stream" });
     var url   = URL.createObjectURL(blob);
@@ -1733,6 +2027,18 @@ $("loadRemarksBtn").addEventListener("click", async () => {
   const classArm  = $("remarkClassArm").value;
   const term      = $("remarkTerm").value;
   const classBase = classArm ? armToBase(classArm) : "";
+
+  // Check if this session/term is frozen
+  const sessionData = _sessionCache || await getSession();
+  const isFrozen = await isSessionFrozen(sessionData.session, term);
+  
+  if (isFrozen) {
+    toast("⚠️ This term/session is FROZEN. Remarks cannot be modified.", "warning");
+    $("saveRemarksBtn").style.display = "none";
+  } else {
+    $("saveRemarksBtn").style.display = "inline-flex";
+  }
+
   if (!classArm) { toast("Select a class arm.", "error"); return; }
   if (_isFT && !_isMaster && classBase !== _ftClass) {
     toast("You can only enter remarks for your own class.", "error"); return;
@@ -1852,7 +2158,7 @@ function sectionLabel(section) {
   if (section === "SS")      return "Senior Secondary (SS)";
   if (section === "BASIC")   return "Basic (1–5)";
   if (section === "NURSERY") return "Nursery (1–3)";
-  if (section === "PRE NURSERY")  return "PRE NURSING";
+  if (section === "PRE NURSERY")  return "Pre Nursery";
   if (section === "ALL")     return "All Sections";
   return section || "—";
 }
@@ -2079,28 +2385,218 @@ $("saveGradingBtn")?.addEventListener("click", async () => {
   finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save"></i> Save Grading System'; }
 });
 
+// ── SAVE SESSION WITH CACHE CLEARING ───────────────────────────
 $("saveSessionBtn")?.addEventListener("click", async () => {
-  const session   = $("sessionInput").value.trim();
-  const term      = $("termInput").value;
+  const session = $("sessionInput").value.trim();
+  const newTerm = $("termInput").value;
   const startDate = $("termStartDate")?.value || "";
-  const endDate   = $("termEndDate")?.value   || "";
-  if (!session) { toast("Enter a session.", "error"); return; }
-  const btn = $("saveSessionBtn"); btn.disabled = true; btn.textContent = "Saving...";
+  const endDate = $("termEndDate")?.value || "";
+  
+  if (!session) {
+    toast("Enter a session.", "error");
+    return;
+  }
+  
+  const btn = $("saveSessionBtn");
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+  
   try {
-    if (_currentSession) {
-      const { tagged } = await tagAllUntaggedScores(_currentSession);
-      if (tagged > 0) console.log("Tagged " + tagged + " old score(s) with session " + _currentSession);
+    // ── 1. GET CURRENT STATE ──────────────────────────────────
+    const currentData = _sessionCache || await getSession();
+    const oldTerm = currentData.currentTerm || "1";
+    const currentSession = _currentSession || currentData.session || "";
+    const sessionChanged = session !== currentSession;
+    const termChanged = String(newTerm) !== String(oldTerm);
+    
+    console.log("📊 Session Save Debug:", {
+      oldTerm, newTerm, currentSession, session, sessionChanged, termChanged
+    });
+    
+    // ── 2. BLOCK GOING BACKWARD ──────────────────────────────
+    if (termChanged && !sessionChanged) {
+      const newTermNum = parseInt(newTerm);
+      const oldTermNum = parseInt(oldTerm);
+      
+      if (newTermNum < oldTermNum) {
+        toast(`❌ Cannot go back to ${TERM_LABELS[newTerm]}. ${TERM_LABELS[oldTerm]} is the current term.`, "error");
+        $("termInput").value = oldTerm;
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-save"></i> Save Session';
+        return;
+      }
     }
-    var s = _sessionCache || await getSession();
-    await saveSession(session, term, _schoolName||s.schoolName||"", _schoolLogo||s.schoolLogo||"", startDate, endDate);
-    _sessionCache = null; // Clear cache — next call fetches fresh data
+    
+    // ── 3. DETECT IF WE NEED TO FREEZE ───────────────────────
+    const newTermNum = parseInt(newTerm);
+    const oldTermNum = parseInt(oldTerm);
+    const shouldFreeze = (newTermNum > oldTermNum) || (newTermNum < oldTermNum && sessionChanged);
+    
+    let frozenClasses = 0;
+    let totalStudents = 0;
+    let freezeStatusEl = document.getElementById("freezeStatus");
+    let freezeStatusText = document.getElementById("freezeStatusText");
+    
+    // Create freeze status elements if they don't exist
+    if (!freezeStatusEl) {
+      const statusDiv = document.createElement("div");
+      statusDiv.id = "freezeStatus";
+      statusDiv.style.display = "none";
+      statusDiv.style.background = "#eff6ff";
+      statusDiv.style.border = "1.5px solid #bfdbfe";
+      statusDiv.style.borderRadius = "10px";
+      statusDiv.style.padding = "14px 16px";
+      statusDiv.style.marginTop = "12px";
+      statusDiv.style.fontWeight = "700";
+      statusDiv.innerHTML = `<span id="freezeStatusText">⏳ Freezing...</span>`;
+      
+      const allCards = document.querySelectorAll("#section-school-config .card");
+      let sessionCard = null;
+      for (let i = 0; i < allCards.length; i++) {
+        const header = allCards[i].querySelector(".card-header h5");
+        if (header && header.textContent.includes("Academic Session")) {
+          sessionCard = allCards[i];
+          break;
+        }
+      }
+      
+      if (sessionCard) {
+        const cardBody = sessionCard.querySelector(".card-body");
+        if (cardBody) {
+          cardBody.appendChild(statusDiv);
+        } else {
+          sessionCard.appendChild(statusDiv);
+        }
+      }
+      freezeStatusEl = document.getElementById("freezeStatus");
+      freezeStatusText = document.getElementById("freezeStatusText");
+    }
+    
+    if (shouldFreeze && _isMaster) {
+      const oldTermLabel = TERM_LABELS[oldTerm] || "Term " + oldTerm;
+      
+      if (freezeStatusEl) freezeStatusEl.style.display = "block";
+      if (freezeStatusText) freezeStatusText.textContent = `⏳ Freezing ${oldTermLabel} (${currentSession})...`;
+      
+      // ── FREEZE ALL CLASSES ──────────────────────────────────
+      for (let i = 0; i < ALL_CLASSES.length; i++) {
+        const classBase = ALL_CLASSES[i];
+        if (freezeStatusText) freezeStatusText.textContent = `⏳ Freezing ${classBase} (${i+1}/${ALL_CLASSES.length})...`;
+        
+        try {
+          const result = await freezeTermData(currentSession, oldTerm, classBase);
+          totalStudents += result.studentCount || 0;
+          frozenClasses++;
+          console.log(`✅ Frozen ${classBase}: ${result.studentCount} students (${result.skippedStudents || 0} skipped)`);
+        } catch (e) {
+          console.warn(`⚠️ Failed to freeze ${classBase}:`, e);
+        }
+      }
+      
+      if (freezeStatusText) {
+        freezeStatusText.textContent = `✅ Frozen ${oldTermLabel}: ${frozenClasses} classes, ${totalStudents} students with scores & attendance archived.`;
+        setTimeout(() => { if (freezeStatusEl) freezeStatusEl.style.display = "none"; }, 5000);
+      }
+      
+      toast(`🔒 ${oldTermLabel} automatically frozen! ${totalStudents} students archived.`, "success");
+      
+      // ── 4. ENABLE PROMOTION ──────────────────────────────────
+      if (sessionChanged) {
+        await enablePromotion(session);
+        toast(`🎓 Promotion is now available for ${session}!`, "success");
+        
+        const promotionSection = $("section-promotion");
+        const promotionNav = document.querySelector('[data-section="section-promotion"]');
+        const availableNotice = $("promotionAvailableNotice");
+        const notAvailableNotice = $("promotionNotAvailableNotice");
+        const sessionText = $("promotionSessionText");
+        
+        if (promotionSection) {
+          promotionSection.style.display = "block";
+          const promFrom = $("promFromClass");
+          if (promFrom) {
+            promFrom.innerHTML = '<option value="">Select class...</option>' + groupedClassOpts(ALL_CLASSES);
+          }
+        }
+        if (promotionNav) promotionNav.style.display = "flex";
+        if (availableNotice) {
+          availableNotice.style.display = "block";
+          if (sessionText) sessionText.textContent = `Session: ${session} — Promote students to next class`;
+        }
+        if (notAvailableNotice) notAvailableNotice.style.display = "none";
+      }
+    } else {
+      if (_isMaster) {
+        await checkPromotionAllowed();
+      }
+    }
+    
+    // ── 5. TAG UNTAGGED SCORES ──────────────────────────────
+    if (session) {
+      try {
+        const { tagged } = await tagAllUntaggedScores(session);
+        if (tagged > 0) console.log(`🏷️ Tagged ${tagged} old score(s) with session ${session}`);
+      } catch (e) {
+        console.warn("⚠️ Failed to tag scores:", e);
+      }
+    }
+    
+    // ── 6. SAVE SESSION TO FIRESTORE ──────────────────────────
+    const s = _sessionCache || await getSession();
+    await saveSession(
+      session,
+      newTerm,
+      _schoolName || s.schoolName || "",
+      _schoolLogo || s.schoolLogo || "",
+      startDate,
+      endDate
+    );
+    
+    // ── 7. CLEAR ALL CACHES ────────────────────────────────────
+    // Clear all caches since session/term changed
+    CACHE.clearAll();
+    console.log("🗑️ Cleared ALL caches due to session/term change");
+    
+    // Clear in-memory caches
+    _sessionCache = null;
+    _bsCache = null;
     _currentSession = session;
-    toast("Session saved.", "success");
+    
+    // Clear frozen sessions cache
+    CACHE.clear(CACHE_KEYS.FROZEN);
+    
+    // ── 8. RELOAD DATA ─────────────────────────────────────────
+    // Reload session fresh from Firestore
+    await loadSession();
+    
+    // Reload students with fresh data
+    await loadStudents();
+    
+    // ── 9. UPDATE UI ───────────────────────────────────────────
     $("statSession").textContent = session;
-    $("statTerm").textContent    = TERM_LABELS[term];
+    $("statTerm").textContent = TERM_LABELS[newTerm];
     updateTermWeeksDisplay(startDate, endDate);
-  } catch(e) { toast(e.message, "error"); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save"></i> Save Session'; }
+    
+    // ── 10. REFRESH DROPDOWNS ──────────────────────────────────
+    buildDropdowns();
+    
+    // ── 11. CHECK PROMOTION STATUS ────────────────────────────
+    if (_isMaster) {
+      await checkPromotionAllowed();
+    }
+    
+    // ── 12. UPDATE DASHBOARD ──────────────────────────────────
+    loadDashboardAnalytics();
+    
+    toast(`✅ Session updated to ${session} — ${TERM_LABELS[newTerm]}. All caches cleared.`, "success");
+    
+  } catch (e) {
+    console.error("❌ Save Session Error:", e);
+    toast(e.message || "Failed to save session", "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-save"></i> Save Session';
+  }
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -2204,6 +2700,24 @@ $("loadAttBtn")?.addEventListener("click", async () => {
   const classArm = $("attClassArm").value;
   const term     = $("attTerm").value;
   const date     = $("attDate").value;
+
+   // Check if this session/term is frozen
+  const sessionData = _sessionCache || await getSession();
+  const isFrozen = await isSessionFrozen(sessionData.session, term);
+  
+  if (isFrozen) {
+    toast("⚠️ This term/session is FROZEN. Attendance cannot be modified.", "warning");
+    $("saveAttBtn").style.display = "none";
+    $("attEntryCard").style.display = "block";
+    $("attEntryTable").innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted)">
+      <i class="bi bi-lock-fill" style="font-size:1.5rem;display:block;margin-bottom:8px;color:#d97706"></i>
+      This term/session is <strong>FROZEN</strong>. Attendance is view-only.
+    </td></tr>`;
+    return;
+  } else {
+    $("saveAttBtn").style.display = "inline-flex";
+  }
+
   if (!classArm) { toast("Select a class arm.", "error"); return; }
   if (!date)     { toast("Select a date.", "error"); return; }
 
@@ -2354,28 +2868,42 @@ async function loadAttHistory(classArm, term, session) {
 }
 
 // ── Save Attendance ───────────────────────────────────────────
+// ── SAVE ATTENDANCE WITH CACHE CLEARING ────────────────────────
 $("saveAttBtn")?.addEventListener("click", async () => {
   const classArm = $("attClassArm").value;
-  const term     = $("attTerm").value;
-  const date     = $("attDate").value;
-  if (!_attStudents.length) { toast("Load students first.", "error"); return; }
+  const term = $("attTerm").value;
+  const date = $("attDate").value;
+  
+  if (!_attStudents.length) {
+    toast("Load students first.", "error");
+    return;
+  }
 
+  // Check if frozen
   const sessionData = _sessionCache || await getSession();
-  const session     = sessionData.session || "";
-  const week        = getWeekNumber(date);
-  const btn         = $("saveAttBtn"); btn.disabled = true; btn.textContent = "Saving...";
+  const isFrozen = await isSessionFrozen(sessionData.session, term);
+  if (isFrozen) {
+    toast("⚠️ This term/session is FROZEN. No changes can be made.", "error");
+    return;
+  }
+
+  const session = sessionData.session || "";
+  const week = getWeekNumber(date);
+  const btn = $("saveAttBtn");
+  btn.disabled = true;
+  btn.textContent = "Saving...";
 
   try {
     // Build records array
     var records = _attStudents.map(function(s) {
-      var am     = parseInt($("am_"+s.regNumber)?.value)||0;
-      var pm     = parseInt($("pm_"+s.regNumber)?.value)||0;
+      var am = parseInt($("am_"+s.regNumber)?.value)||0;
+      var pm = parseInt($("pm_"+s.regNumber)?.value)||0;
       var status = $("att-status_"+s.regNumber)?.value || "Present";
       var remark = $("att-rem_"+s.regNumber)?.value.trim() || "";
       return {
         regNumber: s.regNumber,
-        fullName:  s.fullName,
-        gender:    s.gender,
+        fullName: s.fullName,
+        gender: s.gender,
         classArm,
         classBase: armToBase(classArm),
         date, term: String(term), session, week: String(week),
@@ -2384,13 +2912,34 @@ $("saveAttBtn")?.addEventListener("click", async () => {
       };
     });
 
-    // Batch write — atomic, all or nothing, one network round trip
-    // Prevents partial attendance saves if network drops mid-way
     await saveAttendanceBatch(records);
+    
+    // ── CLEAR ALL RELEVANT CACHES ──────────────────────────────
+    // Clear attendance cache for this class/date
+    const attCacheKey = CACHE_KEYS.ATTENDANCE(classArm, date);
+    CACHE.clear(attCacheKey);
+    
+    // Clear dashboard cache (stats changed)
+    CACHE.clear(CACHE_KEYS.DASHBOARD);
+    
+    // Clear per-student attendance cache for this term
+    CACHE.clear(CACHE_KEYS.STUDENT_ATTENDANCE);
+    
+    // Clear frozen sessions cache (holidays might affect frozen status)
+    CACHE.clear(CACHE_KEYS.FROZEN);
+    
+    console.log(`🗑️ Cleared attendance caches for: ${classArm} - ${date}`);
+    
     toast("Attendance saved — " + records.length + " student(s).", "success");
     loadAttHistory(classArm, term, session);
-  } catch(e) { toast(e.message, "error"); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-cloud-upload-fill"></i> Save Attendance'; }
+    
+  } catch(e) {
+    toast(e.message, "error");
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-cloud-upload-fill"></i> Save Attendance';
+  }
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -3171,145 +3720,192 @@ async function loadDashboardAnalytics() {
 // ══════════════════════════════════════════════════════════════
 let _rbData = { students:[], weekKeys:[], summaryMap:{}, possible:0, classBase:"", term:"", session:"" };
 
+// ── RECORD BANK — Admin only ───────────────────────────────────
 $("loadRecordBankBtn")?.addEventListener("click", async () => {
   if (!_isMaster) { toast("Record Bank is admin only.", "error"); return; }
-  const session   = $("rbSession").value;
-  const term      = $("rbTerm").value;
-  const classVal  = $("rbClass").value;
-  if (!session)  { toast("Please select an academic session.", "error"); return; }
+  
+  const session = $("rbSession").value;
+  const term = $("rbTerm").value;
+  const classVal = $("rbClass").value;
+  
+  if (!session) { toast("Please select an academic session.", "error"); return; }
   if (!classVal) { toast("Select a class or section.", "error"); return; }
 
   // Resolve section values into class lists
-  var isSectionRb = classVal === "__ALL__" || classVal === "__SECONDARY__" || classVal === "__BASIC_NURSERY_PRENURSERY";
-  var rbClasses = [];
-  var rbLabel   = classVal;
+  const isSectionRb = classVal === "__ALL__" || classVal === "__SECONDARY__" || classVal === "__BASIC_NURSERY_PRE_NURSERY__";
+  let rbClasses = [];
+  let rbLabel = classVal;
+  
   if (classVal === "__ALL__") {
     rbClasses = ALL_CLASSES.slice();
-    rbLabel   = "Entire School";
+    rbLabel = "Entire School";
   } else if (classVal === "__SECONDARY__") {
     rbClasses = SS_CLASSES.concat(JS_CLASSES);
-    rbLabel   = "Secondary Section (SS + JS)";
-  } else if (classVal === "__BASIC_NURSERY_PRENURSERY__") {
-    rbClasses = BASIC_CLASSES.concat(NURSERY_CLASSES).concat(PRENURSERY_CLASSES);
-    rbLabel   = "Basic, Nursery & Pre Nursery";
+    rbLabel = "Secondary Section (SS + JS)";
+  } else if (classVal === "__BASIC_NURSERY_PRE_NURSERY__") {
+    rbClasses = BASIC_CLASSES.concat(NURSERY_CLASSES).concat(PRE_NURSERY_CLASSES);
+    rbLabel = "Basic, Nursery & Pre Nursery";
   } else {
     rbClasses = [classVal];
-    rbLabel   = classVal;
+    rbLabel = classVal;
   }
 
-  const classBase = isSectionRb ? rbLabel : classVal;
-  const btn = $("loadRecordBankBtn"); btn.disabled = true; btn.textContent = "Loading...";
+  const btn = $("loadRecordBankBtn");
+  btn.disabled = true;
+  btn.textContent = "Loading...";
+  
   try {
-    const [allStudentsRaw, allRecsRaw, holidays, sessionData] = await Promise.all([
-      Promise.all(rbClasses.map(function(c){ return getStudentsByClass(c); })).then(function(r){ return r.flat(); }),
-      Promise.all(rbClasses.map(function(c){ return getAttendanceByClassBaseTerm(c, term, session); })).then(function(r){ return r.flat(); }),
+    // ── FETCH ALL DATA ──────────────────────────────────────────
+    const [allStudentsRaw, recs, holidays, sessionData] = await Promise.all([
+      Promise.all(rbClasses.map(c => getStudentsByClass(c))).then(r => r.flat()),
+      Promise.all(rbClasses.map(c => getAttendanceByClassBaseTerm(c, term, session))).then(r => r.flat()),
       getHolidays(session, term),
       getSession()
     ]);
 
-    var students = allStudentsRaw;
-    var recs     = allRecsRaw;
+    // ── FETCH SCORES FOR FILTERING ─────────────────────────────
+    const allScoresRaw = await Promise.all(
+      rbClasses.map(c => getScoresByClassTerm(c, term, session))
+    ).then(r => r.flat());
 
-    const termStart     = sessionData.termStartDate || null;
-    const holidayDates  = new Set(holidays.map(h => h.date));
-    // Also treat attendance Holiday status dates as holidays
+    // ── FILTER STUDENTS: ONLY THOSE WITH SCORES ────────────────
+    const studentsWithScores = new Set(allScoresRaw.map(sc => sc.regNumber));
+    const students = allStudentsRaw.filter(s => studentsWithScores.has(s.regNumber));
+
+    // ── CHECK IF ANY STUDENTS HAVE SCORES ──────────────────────
+    if (!students.length) {
+      toast("No students with scores found for " + rbLabel + " in " + TERM_LABELS[term] + ".", "warning");
+      $("recordBankResult").style.display = "block";
+      
+      // Show empty state
+      $("rbAttCards").innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted);grid-column:1/-1">
+        No students with scores found for this term/session.
+      </div>`;
+      $("rbWeeklyBody").innerHTML = `<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text-muted)">No attendance data available.</td></tr>`;
+      $("rbStudentBody").innerHTML = `<tr><td colspan="10" style="text-align:center;padding:16px;color:var(--text-muted)">No students with scores found.</td></tr>`;
+      $("rbStudentThead").innerHTML = "";
+      $("rbBsThead").innerHTML = "";
+      $("rbBsTbody").innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text-muted)">No students with scores found.</td></tr>`;
+      
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-archive"></i> Load Records';
+      return;
+    }
+
+    // ── PROCESS ATTENDANCE DATA ────────────────────────────────
+    const termStart = sessionData.termStartDate || null;
+    const holidayDates = new Set(holidays.map(h => h.date));
     recs.filter(r => r.status === "Holiday").forEach(r => holidayDates.add(r.date));
 
-    const nonHolRecs  = recs.filter(r => r.status !== "Holiday" && !holidayDates.has(r.date));
+    const nonHolRecs = recs.filter(r => r.status !== "Holiday" && !holidayDates.has(r.date));
     const schoolDates = [...new Set(nonHolRecs.map(r => r.date))].filter(d => !isWeekend(d)).sort();
-    const schoolDays  = schoolDates.length;
-    const possible    = schoolDays * 2;
-    const boys        = students.filter(s => s.gender === "Male").length;
-    const girls       = students.filter(s => s.gender === "Female").length;
+    const schoolDays = schoolDates.length;
+    const possible = schoolDays * 2;
+    const boys = students.filter(s => s.gender === "Male").length;
+    const girls = students.filter(s => s.gender === "Female").length;
 
-    // Build week labels
+    // ── BUILD WEEK LABELS ───────────────────────────────────────
     const weekSet = new Set();
     schoolDates.forEach(d => {
       let wkLabel;
       if (termStart) {
-        const diff = Math.floor((new Date(d) - new Date(termStart)) / (7*24*60*60*1000));
+        const diff = Math.floor((new Date(d) - new Date(termStart)) / (7 * 24 * 60 * 60 * 1000));
         wkLabel = "Wk " + (diff + 1);
       } else {
         wkLabel = "Wk " + getWeekNumber(d);
       }
       weekSet.add(wkLabel);
     });
-    const weekKeys = [...weekSet].sort((a,b) => parseInt(a.split(" ")[1]) - parseInt(b.split(" ")[1]));
+    const weekKeys = [...weekSet].sort((a, b) => parseInt(a.split(" ")[1]) - parseInt(b.split(" ")[1]));
 
-    // Per-student weekly summary — skip Holiday records
+    // ── PER-STUDENT WEEKLY SUMMARY ─────────────────────────────
     const summaryMap = {};
     nonHolRecs.forEach(r => {
       if (!summaryMap[r.regNumber]) {
-        summaryMap[r.regNumber] = { present:0, absent:0, weeks:{} };
+        summaryMap[r.regNumber] = { present: 0, absent: 0, weeks: {} };
         weekKeys.forEach(wk => { summaryMap[r.regNumber].weeks[wk] = 0; });
       }
       let wkLabel;
       if (termStart) {
-        const diff = Math.floor((new Date(r.date) - new Date(termStart)) / (7*24*60*60*1000));
+        const diff = Math.floor((new Date(r.date) - new Date(termStart)) / (7 * 24 * 60 * 60 * 1000));
         wkLabel = "Wk " + (diff + 1);
       } else {
         wkLabel = "Wk " + getWeekNumber(r.date);
       }
       if (r.status === "Present") {
-        summaryMap[r.regNumber].present += r.total||2;
-        if (summaryMap[r.regNumber].weeks[wkLabel] !== undefined)
-          summaryMap[r.regNumber].weeks[wkLabel] += r.total||2;
+        summaryMap[r.regNumber].present += r.total || 2;
+        if (summaryMap[r.regNumber].weeks[wkLabel] !== undefined) {
+          summaryMap[r.regNumber].weeks[wkLabel] += r.total || 2;
+        }
       } else {
         summaryMap[r.regNumber].absent++;
       }
     });
 
-    // Cache for Excel export
-    _rbData = { students, weekKeys, summaryMap, possible, classBase, term, session };
+    // ── CACHE FOR EXCEL EXPORT ─────────────────────────────────
+    _rbData = { students, weekKeys, summaryMap, possible, classBase: rbLabel, term, session };
 
-    const totalPresent = Object.values(summaryMap).reduce((a,v) => a + v.present, 0);
-    const boysPresent  = nonHolRecs.filter(r => r.status==="Present" && r.gender==="Male").length;
-    const girlsPresent = nonHolRecs.filter(r => r.status==="Present" && r.gender==="Female").length;
-    const termRate     = (possible * students.length) > 0
-      ? ((totalPresent/(possible*students.length))*100).toFixed(1) : "0";
+    // ── STAT CARDS ──────────────────────────────────────────────
+    const totalPresent = Object.values(summaryMap).reduce((a, v) => a + v.present, 0);
+    const boysPresent = nonHolRecs.filter(r => r.status === "Present" && r.gender === "Male").reduce((s, r) => s + (r.total || 2), 0);
+    const girlsPresent = nonHolRecs.filter(r => r.status === "Present" && r.gender === "Female").reduce((s, r) => s + (r.total || 2), 0);
+    const termRate = (possible * students.length) > 0
+      ? ((totalPresent / (possible * students.length)) * 100).toFixed(1)
+      : "0";
 
-    // Stat cards
     $("rbAttCards").innerHTML = [
-      { val: students.length, lbl:"Total Students",       color:"#4f46e5" },
-      { val: schoolDays,      lbl:"School Days Open",     color:"#0891b2" },
-      { val: totalPresent,    lbl:"Total Present (Term)", color:"#10b981" },
-      { val: termRate+"%",    lbl:"Average Attendance",   color:"#7c3aed" },
-      { val: boysPresent,     lbl:"Boys Attendance",      color:"#2563eb" },
-      { val: girlsPresent,    lbl:"Girls Attendance",     color:"#db2777" },
+      { val: students.length, lbl: "Students with Scores", color: "#4f46e5" },
+      { val: schoolDays, lbl: "School Days Open", color: "#0891b2" },
+      { val: totalPresent, lbl: "Total Present (Term)", color: "#10b981" },
+      { val: termRate + "%", lbl: "Average Attendance", color: "#7c3aed" },
+      { val: boysPresent, lbl: "Boys Attendance", color: "#2563eb" },
+      { val: girlsPresent, lbl: "Girls Attendance", color: "#db2777" }
     ].map(c => `<div class="stat-card">
       <div><div class="stat-val" style="color:${c.color}">${c.val}</div><div class="stat-lbl">${c.lbl}</div></div>
     </div>`).join("");
 
-    // Weekly breakdown — use nonHolRecs (holidays already excluded)
+    // ── WEEKLY BREAKDOWN ────────────────────────────────────────
     const byWeek = {};
     nonHolRecs.forEach(r => {
       if (isWeekend(r.date)) return;
       let wk;
       if (termStart) {
-        const diff = Math.floor((new Date(r.date) - new Date(termStart)) / (7*24*60*60*1000));
+        const diff = Math.floor((new Date(r.date) - new Date(termStart)) / (7 * 24 * 60 * 60 * 1000));
         wk = "Week " + (diff + 1);
       } else {
         wk = "Week " + getWeekNumber(r.date);
       }
-      if (!byWeek[wk]) byWeek[wk] = { days:new Set(), present:0, boys:0, girls:0 };
+      if (!byWeek[wk]) byWeek[wk] = { days: new Set(), present: 0, boys: 0, girls: 0 };
       byWeek[wk].days.add(r.date);
       if (r.status === "Present") {
-        byWeek[wk].present++;
-        if (r.gender === "Male") byWeek[wk].boys++; else byWeek[wk].girls++;
+        byWeek[wk].present += r.total || 2;
+        if (r.gender === "Male") byWeek[wk].boys += r.total || 2;
+        else byWeek[wk].girls += r.total || 2;
       }
     });
+
     $("rbWeeklyBody").innerHTML = Object.keys(byWeek)
-      .sort((a,b) => parseInt(a.split(" ")[1]) - parseInt(b.split(" ")[1]))
+      .sort((a, b) => parseInt(a.split(" ")[1]) - parseInt(b.split(" ")[1]))
       .map(wk => {
         const w = byWeek[wk];
         const d = w.days.size;
         const poss = d * 2 * students.length;
-        const pct  = poss > 0 ? ((w.present/poss)*100).toFixed(1) : "0";
-        return `<tr><td>${wk}</td><td>${d*2}</td><td>${w.present}</td><td>${w.boys}</td><td>${w.girls}</td><td><strong>${pct}%</strong></td></tr>`;
+        const pct = poss > 0 ? ((w.present / poss) * 100).toFixed(1) : "0";
+        return `<tr>
+          <td>${wk}</td>
+          <td>${d * 2}</td>
+          <td>${w.present}</td>
+          <td>${w.boys}</td>
+          <td>${w.girls}</td>
+          <td><strong>${pct}%</strong></td>
+        </tr>`;
       }).join("") || `<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text-muted)">No attendance data.</td></tr>`;
 
-    // Individual student summary — with weekly columns + class totals row
-    const sorted = students.sort((a,b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
+    // ── INDIVIDUAL STUDENT SUMMARY ─────────────────────────────
+    const sorted = students.sort((a, b) =>
+      (a.regNumber || "").localeCompare(b.regNumber || "", undefined, { numeric: true })
+    );
+
     $("rbStudentThead").innerHTML = `<tr>
       <th>Reg No.</th><th>Student Name</th><th>Gender</th>
       ${weekKeys.map(wk => `<th style="text-align:center">${wk}<br><small>/10</small></th>`).join("")}
@@ -3317,27 +3913,28 @@ $("loadRecordBankBtn")?.addEventListener("click", async () => {
       <th style="text-align:center">Att %</th>
     </tr>`;
 
-    // Compute class week totals and overall total for footer
+    // Compute class week totals
     const classTotals = {};
     weekKeys.forEach(wk => { classTotals[wk] = 0; });
     let classOverallTotal = 0;
     sorted.forEach(s => {
-      const info = summaryMap[s.regNumber] || { present:0, weeks:{} };
-      weekKeys.forEach(wk => { classTotals[wk] += info.weeks?.[wk]||0; });
+      const info = summaryMap[s.regNumber] || { present: 0, weeks: {} };
+      weekKeys.forEach(wk => { classTotals[wk] += info.weeks?.[wk] || 0; });
       classOverallTotal += info.present;
     });
     const classOverallPct = (possible * sorted.length) > 0
-      ? ((classOverallTotal/(possible*sorted.length))*100).toFixed(1) : "0";
+      ? ((classOverallTotal / (possible * sorted.length)) * 100).toFixed(1)
+      : "0";
 
     const studentRows = sorted.map(s => {
-      const info = summaryMap[s.regNumber] || { present:0, absent:0, weeks:{} };
-      const pct  = possible > 0 ? ((info.present/possible)*100).toFixed(1) : "0";
-      const cls  = parseFloat(pct) >= 75 ? "badge-success" : parseFloat(pct) >= 50 ? "badge-warning" : "badge-danger";
-      const wkCells = weekKeys.map(wk => `<td style="text-align:center">${info.weeks?.[wk]||0}</td>`).join("");
+      const info = summaryMap[s.regNumber] || { present: 0, absent: 0, weeks: {} };
+      const pct = possible > 0 ? ((info.present / possible) * 100).toFixed(1) : "0";
+      const cls = parseFloat(pct) >= 75 ? "badge-success" : parseFloat(pct) >= 50 ? "badge-warning" : "badge-danger";
+      const wkCells = weekKeys.map(wk => `<td style="text-align:center">${info.weeks?.[wk] || 0}</td>`).join("");
       return `<tr>
         <td><strong>${s.regNumber}</strong></td>
-        <td style="font-weight:700">${s.fullName||"—"}</td>
-        <td><span class="badge ${s.gender==="Female"?"badge-pink":"badge-blue"}" style="font-size:.7rem">${s.gender||"—"}</span></td>
+        <td style="font-weight:700">${s.fullName || "—"}</td>
+        <td><span class="badge ${s.gender === "Female" ? "badge-pink" : "badge-blue"}" style="font-size:.7rem">${s.gender || "—"}</span></td>
         ${wkCells}
         <td style="text-align:center;font-weight:800">${info.present}</td>
         <td style="text-align:center"><span class="badge ${cls}">${pct}%</span></td>
@@ -3353,79 +3950,173 @@ $("loadRecordBankBtn")?.addEventListener("click", async () => {
 
     $("rbStudentBody").innerHTML = studentRows
       ? studentRows + totalsRow
-      : `<tr><td colspan="${4+weekKeys.length}" style="text-align:center;padding:16px;color:var(--text-muted)">No students found.</td></tr>`;
+      : `<tr><td colspan="${4 + weekKeys.length}" style="text-align:center;padding:16px;color:var(--text-muted)">No students found.</td></tr>`;
 
-    // Broadsheet record — individual class only (not for section views)
+    // ── BROADSHEET RECORD ──────────────────────────────────────
     const rbBsCard = $("rbBroadsheetCard");
     if (isSectionRb) {
       if (rbBsCard) rbBsCard.style.display = "none";
     } else {
       if (rbBsCard) rbBsCard.style.display = "block";
-      const allArms    = ALL_ARMS.filter(a => armToBase(a) === classVal);
-      const scoresList = await Promise.all(allArms.map(arm => getScoresByClassArmTerm(arm, term, session)));
-      const allScores  = scoresList.flat();
-      const subjects   = await getClassSubjects(classVal, term, session);
-      const scoreMap   = {};
+      
+      const allArms = ALL_ARMS.filter(a => armToBase(a) === classVal);
+      const scoresList = await Promise.all(
+        allArms.map(arm => getScoresByClassArmTerm(arm, term, session))
+      );
+      const allScores = scoresList.flat();
+      const subjects = await getClassSubjects(classVal, term, session);
+      
+      const scoreMap = {};
       allScores.forEach(sc => {
         if (!scoreMap[sc.regNumber]) scoreMap[sc.regNumber] = {};
         scoreMap[sc.regNumber][sc.subject] = sc;
       });
 
-    const bsRows = students.map(s => {
-      const offAll = !s.subjectsOffered || s.subjectsOffered === "all";
-      const scoredSubjects = Object.keys(scoreMap[s.regNumber] || {}).filter(sub => {
-        const sc = scoreMap[s.regNumber][sub];
-        return !sc.term || String(sc.term) === String(_bsCache.term);
-      });
-      let offeredSet;
-      if (offAll) {
-        offeredSet = new Set(scoredSubjects);
+      // ── FILTER STUDENTS FOR BROADSHEET ───────────────────────
+      // Only students who have scores in this term
+      const studentsWithScoresSet = new Set(allScores.map(sc => sc.regNumber));
+      const filteredStudents = students.filter(s => studentsWithScoresSet.has(s.regNumber));
+
+      const bsRows = filteredStudents.map(s => {
+        const offAll = !s.subjectsOffered || s.subjectsOffered === "all";
+        const scoredSubjects = Object.keys(scoreMap[s.regNumber] || {}).filter(sub => {
+          const sc = scoreMap[s.regNumber][sub];
+          return !sc.term || String(sc.term) === String(term);
+        });
+        let offeredSet;
+        if (offAll) {
+          offeredSet = new Set(scoredSubjects);
+        } else {
+          const offeredFromList = subjects.filter(sub =>
+            Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(sub)
+          );
+          offeredSet = new Set([...offeredFromList, ...scoredSubjects]);
+        }
+        const offered = Array.from(offeredSet);
+        let grand = 0;
+        offered.forEach(sub => {
+          const sc = scoreMap[s.regNumber]?.[sub];
+          if (sc) grand += (sc.test1 || 0) + (sc.test2 || 0) + (sc.exam || 0);
+        });
+        return { ...s, offered, grand };
+      }).sort((a, b) =>
+        (a.regNumber || "").localeCompare(b.regNumber || "", undefined, { numeric: true })
+      );
+
+      if (!bsRows.length) {
+        $("rbBsThead").innerHTML = "";
+        $("rbBsTbody").innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text-muted)">No students with scores found in this class.</td></tr>`;
       } else {
-        const offeredFromList = subjects.filter(sub =>
-          Array.isArray(s.subjectsOffered) && s.subjectsOffered.includes(sub)
-        );
-        offeredSet = new Set([...offeredFromList, ...scoredSubjects]);
+        // Position map
+        const posMap = {};
+        [...bsRows].sort((a, b) => b.grand - a.grand).forEach((r, i) => {
+          posMap[r.regNumber] = ordinal(i + 1);
+        });
+
+        // Subject stats
+        const subjAvg = {},
+          subjHigh = {},
+          subjLow = {};
+        subjects.forEach(sub => {
+          const tots = bsRows.filter(r => r.offered.includes(sub))
+            .map(r => {
+              const sc = scoreMap[r.regNumber]?.[sub];
+              return sc ? (sc.test1 || 0) + (sc.test2 || 0) + (sc.exam || 0) : 0;
+            })
+            .filter(t => t > 0);
+          subjAvg[sub] = tots.length ? (tots.reduce((a, b) => a + b, 0) / tots.length).toFixed(1) : "—";
+          subjHigh[sub] = tots.length ? Math.max(...tots) : "—";
+          subjLow[sub] = tots.length ? Math.min(...tots) : "—";
+        });
+
+        // Per-subject position
+        const subjPos = {};
+        subjects.forEach(sub => {
+          const offerers = bsRows.filter(r => r.offered.includes(sub))
+            .map(r => {
+              const sc = scoreMap[r.regNumber]?.[sub];
+              return { reg: r.regNumber, total: sc ? (sc.test1 || 0) + (sc.test2 || 0) + (sc.exam || 0) : 0 };
+            })
+            .sort((a, b) => b.total - a.total);
+          subjPos[sub] = {};
+          offerers.forEach((r, i) => { subjPos[sub][r.reg] = ordinal(i + 1); });
+        });
+
+        // Build thead
+        let bsThead = `<tr>
+          <th rowspan="2">S/N</th>
+          <th rowspan="2" style="text-align:left;min-width:140px">Student Name</th>
+          <th rowspan="2">Reg No.</th>`;
+        subjects.forEach(s => { bsThead += `<th colspan="5" style="background:#4338ca">${s}</th>`; });
+        bsThead += `<th rowspan="2">Grand Total</th><th rowspan="2">Average</th><th rowspan="2">Position</th></tr><tr>`;
+        subjects.forEach(() => { bsThead += `<th class="sub-header">T1</th><th class="sub-header">T2</th><th class="sub-header">Ex</th><th class="sub-header">Total</th><th class="sub-header">Pos</th>`; });
+        bsThead += "</tr>";
+
+        // Build tbody
+        let bsTbody = "";
+        bsRows.forEach((r, idx) => {
+          let cols = "";
+          subjects.forEach(sub => {
+            if (!r.offered.includes(sub)) {
+              cols += `<td colspan="5" style="text-align:center;color:#94a3b8;font-size:.72rem">N/A</td>`;
+              return;
+            }
+            const sc = scoreMap[r.regNumber]?.[sub];
+            const t1 = sc?.test1 || 0,
+              t2 = sc?.test2 || 0,
+              ex = sc?.exam || 0,
+              tot = t1 + t2 + ex;
+            const g = tot > 0 ? grade(tot) : "—";
+            cols += `<td>${t1 || "—"}</td><td>${t2 || "—"}</td><td>${ex || "—"}</td>
+                     <td class="${tot > 0 ? gradeClass(g) : ""}" style="font-weight:800">${tot || "—"}</td>
+                     <td class="pos-cell">${subjPos[sub]?.[r.regNumber] || "—"}</td>`;
+          });
+          const avg = r.offered.length > 0 ? (r.grand / r.offered.length).toFixed(1) : "0";
+          bsTbody += `<tr>
+            <td>${idx + 1}</td>
+            <td class="student-info">${r.fullName || "—"}</td>
+            <td>${r.regNumber}</td>
+            ${cols}
+            <td style="font-weight:800">${r.grand}</td>
+            <td style="font-weight:800">${avg}</td>
+            <td class="pos-cell">${posMap[r.regNumber] || "—"}</td>
+          </tr>`;
+        });
+
+        // Summary rows
+        bsTbody += `
+          <tr class="summary-row">
+            <td colspan="3" style="text-align:left;font-weight:800;font-size:.78rem">CLASS AVERAGE</td>
+            ${subjects.map(s => `<td colspan="4" style="font-weight:800">${subjAvg[s]}</td><td>—</td>`).join("")}
+            <td colspan="3">—</td>
+          </tr>
+          <tr class="summary-row">
+            <td colspan="3" style="text-align:left;font-weight:800;font-size:.78rem">HIGHEST SCORE</td>
+            ${subjects.map(s => `<td colspan="4" style="font-weight:800">${subjHigh[s]}</td><td>—</td>`).join("")}
+            <td colspan="3">—</td>
+          </tr>
+          <tr class="summary-row">
+            <td colspan="3" style="text-align:left;font-weight:800;font-size:.78rem">LOWEST SCORE</td>
+            ${subjects.map(s => `<td colspan="4" style="font-weight:800">${subjLow[s]}</td><td>—</td>`).join("")}
+            <td colspan="3">—</td>
+          </tr>`;
+
+        $("rbBsThead").innerHTML = bsThead;
+        $("rbBsTbody").innerHTML = bsTbody;
       }
-      const offered = Array.from(offeredSet);
-      let grand = 0;
-      offered.forEach(sub => { const sc = scoreMap[s.regNumber]?.[sub]; if(sc) grand += (sc.test1||0)+(sc.test2||0)+(sc.exam||0); });
-      return { ...s, offered, grand };
-    }).sort((a,b) => (a.regNumber||"").localeCompare(b.regNumber||"", undefined, {numeric:true}));
+    }
 
-    const posMap = {};
-    [...bsRows].sort((a,b) => b.grand - a.grand).forEach((r,i) => { posMap[r.regNumber] = ordinal(i+1); });
-
-    let bsThead = `<tr><th rowspan="2">S/N</th><th rowspan="2" style="text-align:left;min-width:140px">Student Name</th><th rowspan="2">Reg No.</th>`;
-    subjects.forEach(s => { bsThead += `<th colspan="5" style="background:#4338ca">${s}</th>`; });
-    bsThead += `<th rowspan="2">Grand Total</th><th rowspan="2">Average</th><th rowspan="2">Position</th></tr><tr>`;
-    subjects.forEach(() => { bsThead += `<th class="sub-header">T1</th><th class="sub-header">T2</th><th class="sub-header">Ex</th><th class="sub-header">Total</th><th class="sub-header">Pos</th>`; });
-    bsThead += "</tr>";
-
-    let bsTbody = "";
-    bsRows.forEach((r, idx) => {
-      let cols = "";
-      subjects.forEach(sub => {
-        if (!r.offered.includes(sub)) { cols += `<td colspan="5" style="text-align:center;color:#94a3b8;font-size:.72rem">N/A</td>`; return; }
-        const sc = scoreMap[r.regNumber]?.[sub];
-        const t1 = sc?.test1||0, t2=sc?.test2||0, ex=sc?.exam||0, tot=t1+t2+ex;
-        const g  = tot>0?grade(tot):"—";
-        cols += `<td>${t1||"—"}</td><td>${t2||"—"}</td><td>${ex||"—"}</td>
-                 <td class="${tot>0?gradeClass(g):""}" style="font-weight:800">${tot||"—"}</td>
-                 <td class="pos-cell">${posMap[r.regNumber]||"—"}</td>`;
-      });
-      const avg = r.offered.length > 0 ? (r.grand/r.offered.length).toFixed(1) : "0";
-      bsTbody += `<tr><td>${idx+1}</td><td class="student-info">${r.fullName||"—"}</td><td>${r.regNumber}</td>${cols}
-        <td style="font-weight:800">${r.grand}</td><td style="font-weight:800">${avg}</td>
-        <td class="pos-cell">${posMap[r.regNumber]||"—"}</td></tr>`;
-    });
-    $("rbBsThead").innerHTML = bsThead;
-    $("rbBsTbody").innerHTML = bsTbody || `<tr><td colspan="${3+subjects.length*5+3}" style="text-align:center;padding:20px;color:var(--text-muted)">No score data found.</td></tr>`;
-    } // end else (individual class broadsheet)
-
+    // ── SHOW RESULT ─────────────────────────────────────────────
     $("recordBankResult").style.display = "block";
-    toast("Records loaded — " + rbLabel + ".", "success");
-  } catch(e) { toast(e.message, "error"); console.error(e); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-archive"></i> Load Records'; }
+    toast("Records loaded — " + rbLabel + " (" + students.length + " students with scores).", "success");
+
+  } catch (e) {
+    toast(e.message, "error");
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-archive"></i> Load Records';
+  }
 });
 
 // ── Export Record Bank student summary to Excel ───────────────

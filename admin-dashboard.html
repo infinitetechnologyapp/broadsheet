@@ -287,7 +287,7 @@
           <div id="dashDualSTCard" style="display:none;margin-top:16px">
             <div class="card">
               <div class="card-header"><h5><i class="bi bi-award-fill" style="color:#f59e0b"></i> Top 6 Students Per Subject</h5></div>
-              <div class="card-body" style="padding:0">
+                <div class="card-body" style="padding:0">
                 <div id="dualStTopStudentsList" style="padding:12px;font-size:.85rem;color:var(--text-muted)">Loading…</div>
               </div>
             </div>
@@ -406,6 +406,17 @@
       <!-- SCORES -->
       <section class="section" id="section-scores">
         <div class="page-title"><i class="bi bi-pencil-square" style="color:var(--primary)"></i> Enter Scores</div>
+        <!-- ← ADD THIS BLOCK -->
+  <div id="frozenSessionWarning" style="display:none;background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;padding:14px 18px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <i class="bi bi-lock-fill" style="color:#d97706;font-size:1.2rem"></i>
+      <div>
+        <div style="font-weight:800;color:#92400e;font-size:.9rem">🔒 Session is Frozen</div>
+        <div style="font-size:.8rem;color:#78350f">This term/session is locked. No changes can be made to scores, attendance, or remarks.</div>
+      </div>
+    </div>
+  </div>
+  <!-- ← END ADD -->
         <div class="card mb-3">
           <div class="card-header"><h5><i class="bi bi-funnel-fill"></i> Filter</h5></div>
           <div class="card-body">
